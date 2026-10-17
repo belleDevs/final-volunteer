@@ -20,15 +20,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Seed Skills
+        // 1. Seed Skills (5 catalog skills aligned with organization event roles)
         $skillsData = [
+            ['name' => 'Public Relations', 'description' => 'Media, registration hosting, and guest-facing communication.'],
+            ['name' => 'Community Outreach', 'description' => 'Local coordination, cleanup, and civic engagement.'],
+            ['name' => 'Event Coordinating', 'description' => 'Stage, schedule, ushering support, and program flow.'],
             ['name' => 'First Aid Responder', 'description' => 'Medical assistance and emergency first-aid response.'],
-            ['name' => 'Public Relations', 'description' => 'Media communication, social marketing, and registration hosting.'],
-            ['name' => 'Coastal Bench Building', 'description' => 'Carpentry and construction of standard public benches.'],
-            ['name' => 'Disaster Response', 'description' => 'Emergency logistics, supply distribution, and rescue coordination.'],
-            ['name' => 'Mangrove Planting', 'description' => 'Sapling handling, planting, and ecosystem restoration.'],
-            ['name' => 'Event Coordinating', 'description' => 'Stage, sound, audio-visual, and schedule tracking.'],
-            ['name' => 'Community Outreach', 'description' => 'Local coordination, mapping, and civic engagements.'],
+            ['name' => 'Disaster Response', 'description' => 'Crowd safety, logistics, and emergency coordination.'],
         ];
 
         $skills = [];
@@ -164,7 +162,6 @@ class DatabaseSeeder extends Seeder
             'due_date' => Carbon::create(2026, 9, 4, 7, 0),
         ]);
         $task1->skills()->attach([
-            $skills['Mangrove Planting']->id,
             $skills['Community Outreach']->id,
         ]);
 
@@ -254,31 +251,6 @@ class DatabaseSeeder extends Seeder
         ChatbotRule::create([
             'keyword' => 'certificate',
             'response' => 'Certificates are automatically generated in PDF format upon the verification of task completion by your organization coordinator. Check the "Generated Credentials" section on your dashboard.'
-        ]);
-
-        // 7. Seed Record Archives (Compliance Documents)
-        RecordArchive::create([
-            'table_name' => 'compliance_documents',
-            'record_id' => 1,
-            'original_data' => [
-                'filename' => '2025 Chapter Audited Financial Statement.pdf',
-                'size' => '2.4 MB',
-                'uploaded_at' => '2026-01-15'
-            ],
-            'archived_by' => $org->id,
-            'reason' => 'Multi-year compliance archiving for regional audits.'
-        ]);
-
-        RecordArchive::create([
-            'table_name' => 'compliance_documents',
-            'record_id' => 2,
-            'original_data' => [
-                'filename' => '2025 Annual General Assembly Minutes.pdf',
-                'size' => '1.8 MB',
-                'uploaded_at' => '2026-02-10'
-            ],
-            'archived_by' => $org->id,
-            'reason' => 'Multi-year compliance archiving for regional audits.'
         ]);
 
         // 8. Seed Notifications

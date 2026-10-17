@@ -1,9 +1,9 @@
 <x-layout.app title="VolunteerHub - Volunteer Registration">
-    <div class="flex-grow flex items-center justify-center p-3 sm:p-6 md:p-12 min-h-screen bg-gradient-to-tr from-slate-900 via-jci-dark to-jci-blue py-6 sm:py-12">
+    <div class="flex-grow flex items-center justify-center p-3 sm:p-6 md:p-12 min-h-[100dvh] bg-gradient-to-tr from-slate-900 via-jci-dark to-jci-blue py-4 sm:py-12">
         <div class="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 my-auto">
             
             <!-- Left Banner: Aesthetics & Mission -->
-            <div class="md:col-span-5 bg-gradient-to-b from-jci-blue to-jci-dark p-6 sm:p-8 md:p-12 text-white flex flex-col justify-between relative overflow-hidden">
+            <div class="hidden md:col-span-5 bg-gradient-to-b from-jci-blue to-jci-dark p-6 sm:p-8 md:p-12 text-white md:flex flex-col justify-between relative overflow-hidden">
                 <div class="absolute -top-12 -left-12 w-48 h-48 bg-white/5 rounded-full blur-2xl"></div>
                 <div class="absolute -bottom-20 -right-20 w-72 h-72 bg-jci-accent/10 rounded-full blur-3xl"></div>
                 
@@ -15,27 +15,29 @@
 
                 <div class="mt-6 sm:mt-8 relative z-10 border-t border-white/10 pt-4 sm:pt-6">
                     <div class="flex items-center gap-3">
-                        <div class="p-2.5 sm:p-3 bg-white/10 rounded-2xl shrink-0">
-                            <i class="fa-solid fa-handshake-angle text-jci-accent text-xl sm:text-2xl"></i>
-                        </div>
+                        <x-ui.brand-mark class="shadow-none ring-1 ring-white/20" />
                         <div>
-                            <h5 class="text-xs font-bold text-white">Instant Account Access</h5>
-                            <p class="text-[10px] text-slate-300">Volunteers get instant access upon registration</p>
+                            <h5 class="text-xs font-bold text-white">Interview before membership</h5>
+                            <p class="text-[10px] text-slate-300">Create an account now. Joining an organization needs a personal interview and approval.</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Right Form: Volunteer Registration -->
-            <div class="md:col-span-7 p-6 sm:p-8 md:p-12 flex flex-col justify-center">
+            <div class="md:col-span-7 p-5 sm:p-8 md:p-12 flex flex-col justify-center">
+                <div class="mb-4 flex items-center gap-2.5 md:hidden">
+                    <x-ui.brand-mark size="sm" />
+                    <p class="text-sm font-extrabold text-slate-900">VolunteerHub</p>
+                </div>
                 
                 <!-- Toggle Header -->
-                <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
-                    <div>
-                        <h3 class="text-2xl font-black text-slate-900">Volunteer Registration</h3>
+                <div class="flex items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4 mb-6">
+                    <div class="min-w-0">
+                        <h3 class="text-xl sm:text-2xl font-black text-slate-900">Volunteer Registration</h3>
                         <p class="text-xs text-slate-500 mt-0.5">Create your volunteer profile in seconds.</p>
                     </div>
-                    <a href="{{ route('login') }}" class="text-xs font-bold text-jci-blue hover:underline">
+                    <a href="{{ route('login') }}" class="shrink-0 text-xs font-bold text-jci-blue hover:underline">
                         <i class="fa-solid fa-arrow-left"></i> Log In
                     </a>
                 </div>
@@ -52,11 +54,14 @@
                     </a>
                 </div>
 
-                <form action="{{ route('register.volunteer') }}" method="POST" class="space-y-4">
+                <form action="{{ route('register.volunteer') }}" method="POST" class="space-y-4 relative">
                     @csrf
-                    <div class="hidden" aria-hidden="true">
+                    <input type="hidden" name="registration_token" value="{{ $registrationToken }}">
+                    <div class="absolute -left-[9999px] h-0 w-0 overflow-hidden opacity-0" aria-hidden="true">
                         <label for="volunteer-website">Website</label>
                         <input id="volunteer-website" type="text" name="website" value="" tabindex="-1" autocomplete="off">
+                        <label for="volunteer-company-url">Company URL</label>
+                        <input id="volunteer-company-url" type="url" name="company_url" value="" tabindex="-1" autocomplete="off">
                     </div>
 
                     <!-- Full Name -->
@@ -127,8 +132,16 @@
                                 @endforelse
                             </select>
                         </div>
-                        <p class="text-[10px] text-slate-400 mt-1">Choose the organization you want to volunteer with.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">You apply to join this organization. Membership starts after a personal interview and their approval.</p>
                         @error('organization_id')
+                            <p class="text-[10px] text-rose-500 mt-1 font-bold">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Why do you want to join? <span class="font-normal normal-case tracking-normal text-slate-400">(optional)</span></label>
+                        <textarea name="application_message" rows="3" maxlength="1000" placeholder="Tell the organization a little about yourself and why you want to join." class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:ring-1 focus:ring-jci-blue focus:outline-none @error('application_message') border-rose-500 @enderror">{{ old('application_message') }}</textarea>
+                        @error('application_message')
                             <p class="text-[10px] text-rose-500 mt-1 font-bold">{{ $message }}</p>
                         @enderror
                     </div>
@@ -199,7 +212,7 @@
                     <!-- Submit Button -->
                     <div class="pt-2">
                         <button type="submit" class="w-full bg-jci-blue hover:bg-jci-dark text-white font-bold text-xs py-3.5 rounded-xl transition duration-300 flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20">
-                            <i class="fa-solid fa-user-plus"></i> Complete Volunteer Registration
+                            <i class="fa-solid fa-envelope-circle-check"></i> Continue — verify email
                         </button>
                     </div>
                 </form>

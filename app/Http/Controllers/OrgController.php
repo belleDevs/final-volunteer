@@ -11,12 +11,15 @@ use App\Models\Skill;
 use App\Models\Assignment;
 use App\Models\Certificate;
 use App\Models\TaskApplication;
+use App\Models\OrganizationApplication;
 use App\Models\OrgConversation;
+use App\Models\PlatformMessage;
 use App\Models\ChatbotResponse;
 use App\Models\VolunteerReward;
 use App\Models\RecordArchive;
 use App\Mail\TaskVolunteerInviteMail;
 use App\Support\ActivityReport;
+use App\Support\CertificatePdf;
 use App\Support\OrgNotifier;
 use App\Support\OrgPreferences;
 use App\Support\AuditTrail;
@@ -67,12 +70,7 @@ class OrgController extends Controller
             ->values();
 
         $organizationVolunteers = User::where('role', 'volunteer')
-            ->where(function ($query) use ($orgId, $linkedVolunteerIds) {
-                $query->where('organization_id', $orgId);
-                if ($linkedVolunteerIds->isNotEmpty()) {
-                    $query->orWhereIn('id', $linkedVolunteerIds);
-                }
-            })
+            ->where('organization_id', $orgId)
             ->with([
                 'skills',
                 'assignments' => function ($query) use ($eventIds) {
@@ -86,6 +84,12 @@ class OrgController extends Controller
                 },
             ])
             ->orderBy('name')
+            ->get();
+
+        $membershipApplications = OrganizationApplication::where('organization_id', $orgId)
+            ->whereIn('status', ['pending', 'interview_scheduled'])
+            ->with(['user.skills'])
+            ->latest()
             ->get();
 
         $events = Event::where('organization_id', $orgId)
@@ -116,6 +120,9 @@ class OrgController extends Controller
         // Open tasks on live events, plus overdue tasks the organization still needs to reassign.
         $allOrgTasks = Task::whereIn('event_id', $eventIds)
             ->whereIn('status', ['pending', 'assigned', 'in_progress'])
+            ->whereHas('event', function ($event) {
+                $event->whereNotIn('status', ['completed', 'cancelled']);
+            })
             ->where(function ($query) use ($now) {
                 $query->whereHas('event', function ($event) use ($now) {
                     $event->where('end_time', '>=', $now)
@@ -227,8 +234,8 @@ class OrgController extends Controller
 
         $assignableVolunteers = User::where('role', 'volunteer')
             ->where('status', 'approved')
+            ->where('organization_id', $orgId)
             ->with('skills')
-            ->orderByRaw('case when organization_id = ? then 0 else 1 end', [$orgId])
             ->orderBy('name')
             ->get();
 
@@ -332,7 +339,7 @@ class OrgController extends Controller
             if ($ownedEvent->updated_at && $ownedEvent->created_at && $ownedEvent->updated_at->gt($ownedEvent->created_at->copy()->addMinutes(2))) {
                 $recentActivities->push([
                     'title' => 'Event details were updated: '.$ownedEvent->title,
-                    'detail' => $ownedEvent->status === 'draft' ? 'Pending Approval' : $ownedEvent->oversightLabel(),
+                    'detail' => $ownedEvent->oversightLabel(),
                     'at' => $ownedEvent->updated_at,
                 ]);
             }
@@ -358,14 +365,6 @@ class OrgController extends Controller
         $awaitingAssignmentCount = $taskApplications->pluck('user_id')->unique()->count();
 
         $reminders = collect();
-        foreach ($events->where('status', 'draft') as $draftEvent) {
-            $reminders->push([
-                'title' => 'Event awaiting approval',
-                'detail' => $draftEvent->title.' is pending admin approval.',
-                'when' => $draftEvent->created_at?->diffForHumans() ?? 'Waiting',
-                'tone' => 'amber',
-            ]);
-        }
         foreach ($dashboardTasks->filter(fn (Task $task) => $task->isOverdue())->take(3) as $overdueTask) {
             $reminders->push([
                 'title' => 'Overdue task',
@@ -426,11 +425,15 @@ class OrgController extends Controller
         $selectedMessageVolunteer = null;
         $selectedConversation = null;
         $messageEntries = collect();
+        $withAdmin = false;
+        $adminMessages = collect();
+        $adminMessageUnread = 0;
         $issuedCertificates = collect();
         $certificateChoices = collect();
         $sentNotices = collect();
         $noticeRecipients = collect();
         $orgNotices = collect();
+        $orgNoticeCounts = ['all' => 0, 'unread' => 0, 'event' => 0, 'task' => 0, 'volunteer' => 0, 'account' => 0, 'certificate' => 0, 'system' => 0];
         $orgNoticeBox = 'all';
         $orgNoticeCategory = '';
         $orgNoticeSearch = '';
@@ -448,6 +451,7 @@ class OrgController extends Controller
             $orgNoticeCategory = (string) $request->query('category', '');
             $orgNoticeSearch = (string) $request->query('q', '');
             $orgNotices = OrgNotifier::inbox($orgId, $orgNoticeBox, $orgNoticeCategory, $orgNoticeSearch);
+            $orgNoticeCounts = OrgNotifier::counts($orgId);
         }
         if ($section === 'certificates') {
             [$issuedCertificates, $certificateChoices] = $this->certificateLists($eventIds);
@@ -494,16 +498,32 @@ class OrgController extends Controller
         if ($section === 'messages') {
             Cache::put('org-online-'.$orgId, true, now()->addMinutes(3));
             $messageThreads = $this->organizationMessageThreads($orgId);
-            $selectedId = (int) $request->query('volunteer');
-            $selectedMessageVolunteer = $messageThreads->firstWhere('id', $selectedId) ?? $messageThreads->first();
-            if ($selectedMessageVolunteer) {
-                $selectedConversation = OrgConversation::where('organization_id', $orgId)
-                    ->where('volunteer_id', $selectedMessageVolunteer->id)
-                    ->first();
-                $messageEntries = ChatbotResponse::where('organization_id', $orgId)
-                    ->where('user_id', $selectedMessageVolunteer->id)
-                    ->orderBy('created_at')
-                    ->get();
+            $withAdmin = $request->query('with') === 'admin';
+            $adminMessageUnread = PlatformMessage::where('organization_id', $orgId)
+                ->where('from_admin', true)
+                ->whereNull('read_at')
+                ->count();
+            $adminMessages = PlatformMessage::where('organization_id', $orgId)
+                ->orderBy('created_at')
+                ->get();
+            if ($withAdmin) {
+                PlatformMessage::where('organization_id', $orgId)
+                    ->where('from_admin', true)
+                    ->whereNull('read_at')
+                    ->update(['read_at' => now()]);
+                $adminMessageUnread = 0;
+            } else {
+                $selectedId = (int) $request->query('volunteer');
+                $selectedMessageVolunteer = $selectedId ? $messageThreads->firstWhere('id', $selectedId) : null;
+                if ($selectedMessageVolunteer) {
+                    $selectedConversation = OrgConversation::where('organization_id', $orgId)
+                        ->where('volunteer_id', $selectedMessageVolunteer->id)
+                        ->first();
+                    $messageEntries = ChatbotResponse::where('organization_id', $orgId)
+                        ->where('user_id', $selectedMessageVolunteer->id)
+                        ->orderBy('created_at')
+                        ->get();
+                }
             }
         }
 
@@ -512,6 +532,7 @@ class OrgController extends Controller
             'myEventsCount',
             'assignedVolunteersCount',
             'organizationVolunteers',
+            'membershipApplications',
             'events',
             'activeEvents',
             'archivedEvents',
@@ -548,11 +569,15 @@ class OrgController extends Controller
             'selectedMessageVolunteer',
             'selectedConversation',
             'messageEntries',
+            'withAdmin',
+            'adminMessages',
+            'adminMessageUnread',
             'issuedCertificates',
             'certificateChoices',
             'sentNotices',
             'noticeRecipients',
             'orgNotices',
+            'orgNoticeCounts',
             'orgNoticeBox',
             'orgNoticeCategory',
             'orgNoticeSearch',
@@ -576,6 +601,7 @@ class OrgController extends Controller
             'role' => ['nullable', 'string', 'max:255'],
             'custom_role' => ['nullable', 'string', 'max:255'],
             'title' => ['nullable', 'string', 'max:255'],
+            'user_id' => ['required', 'exists:users,id'],
             'priority' => ['nullable', 'in:low,medium,high'],
             'due_date' => ['nullable', 'date'],
         ]);
@@ -583,6 +609,9 @@ class OrgController extends Controller
         $event = Event::where('id', $data['event_id'])
             ->where('organization_id', Auth::id())
             ->firstOrFail();
+        if (in_array($event->status, ['completed', 'cancelled'], true)) {
+            return back()->with('error', 'Tasks can only be added to a current event.');
+        }
 
         $chosen = ($data['role'] ?? '') === '__custom__'
             ? ($data['custom_role'] ?? '')
@@ -592,12 +621,19 @@ class OrgController extends Controller
             return back()->withErrors(['role' => 'Choose a role, or add the role this event needs.'])->withInput();
         }
 
+        $volunteer = User::where('id', $data['user_id'])
+            ->where('role', 'volunteer')
+            ->where('status', 'approved')
+            ->where('organization_id', Auth::id())
+            ->with('skills')
+            ->firstOrFail();
+
         $task = Task::create([
             'event_id' => $event->id,
             'title' => $title,
             'description' => 'Role added for '.$event->title.'.',
             'priority' => $data['priority'] ?? 'medium',
-            'status' => 'pending',
+            'status' => 'assigned',
             'due_date' => !empty($data['due_date']) ? Carbon::parse($data['due_date']) : $event->start_time,
         ]);
 
@@ -605,29 +641,51 @@ class OrgController extends Controller
         if ($relatedSkillIds->isNotEmpty()) {
             $task->skills()->sync($relatedSkillIds);
         }
+        $task->load('skills');
+
+        $assignment = Assignment::create([
+            'event_id' => $event->id,
+            'task_id' => $task->id,
+            'user_id' => $volunteer->id,
+            'status' => 'pending',
+            'hours_logged' => 0,
+        ]);
+        $assignment->setRelation('task', $task);
+        $assignment->setRelation('event', $event);
+        $assignment->setRelation('user', $volunteer);
 
         AuditTrail::record([
             'action' => 'Task created',
             'action_type' => 'created',
             'module' => 'Tasks',
-            'description' => 'Added "'.$task->title.'" to "'.$event->title.'".',
+            'description' => 'Added "'.$task->title.'" to "'.$event->title.'" and assigned '.$volunteer->name.'.',
             'subject' => $task,
             'subject_label' => $task->title,
-            'new' => ['event' => $event->title, 'status' => 'pending'],
+            'new' => [
+                'event' => $event->title,
+                'status' => 'assigned',
+                'volunteer' => $volunteer->name,
+            ],
         ]);
+
+        VolunteerNotice::notifyAssignment(Auth::user(), $volunteer, $task, null, $assignment);
 
         OrgNotifier::send(
             (int) Auth::id(),
             'task',
-            'Task created',
-            '"'.$task->title.'" was added to "'.$event->title.'".',
+            'Task created and assigned',
+            '"'.$task->title.'" was added to "'.$event->title.'" and assigned to '.$volunteer->name.'.',
             $event->title,
             route('org.dashboard', ['section' => 'tasks']),
             'View task'
         );
 
+        $mailHint = filled($volunteer->email)
+            ? ' An assignment email was sent to '.$volunteer->email.'.'
+            : ' No email was sent because this volunteer has no email on file.';
+
         return redirect()->route('org.dashboard', ['section' => 'tasks'])
-            ->with('success', 'Role "'.$task->title.'" was added to '.$event->title.'.');
+            ->with('success', 'Role "'.$task->title.'" was added to '.$event->title.' and assigned to '.$volunteer->name.'.'.$mailHint);
     }
 
     public function openOrganizationNotice(string $notification)
@@ -827,6 +885,29 @@ class OrgController extends Controller
 
         return redirect()->route('org.dashboard', ['section' => 'officers', 'year' => $data['year']])
             ->with('success', 'The '.$data['year'].' album was added.');
+    }
+
+    public function destroyOfficerAlbum(OfficerAlbum $album)
+    {
+        $organization = $this->currentOrganization();
+        abort_unless((int) $album->organization_id === (int) $organization->id, 403);
+
+        if ((int) $album->year === (int) now()->year) {
+            return redirect()->route('org.dashboard', ['section' => 'officers', 'year' => $album->year])
+                ->with('error', 'The current year album stays on this page.');
+        }
+
+        $year = $album->year;
+        $album->load('officers');
+        foreach ($album->officers as $officer) {
+            Storage::disk('public')->delete($officer->photo_path);
+        }
+        Storage::disk('public')->deleteDirectory('officers/'.$organization->id.'/'.$album->id);
+        $album->delete();
+        $this->auditSettings($organization, 'Officer album deleted', 'Deleted the '.$year.' officer album.');
+
+        return redirect()->route('org.dashboard', ['section' => 'officers'])
+            ->with('success', 'The '.$year.' album was deleted.');
     }
 
     public function storeOfficer(Request $request)
@@ -1096,7 +1177,67 @@ class OrgController extends Controller
             ->update(['needs_takeover' => false]);
 
         return redirect()->route('org.dashboard', ['section' => 'messages', 'volunteer' => $volunteer->id])
-            ->with('success', 'You took over the conversation with '.$volunteer->name.'.');
+            ->with('success', 'You are now replying to '.$volunteer->name.'. The assistant will step aside.');
+    }
+
+    public function releaseToAssistant(User $volunteer)
+    {
+        abort_unless($this->volunteerBelongsToOrganization($volunteer, Auth::id()), 403);
+
+        OrgConversation::updateOrCreate(
+            ['organization_id' => Auth::id(), 'volunteer_id' => $volunteer->id],
+            [
+                'mode' => 'assistant',
+                'needs_takeover' => false,
+                'last_message_at' => now(),
+            ]
+        );
+
+        ChatbotResponse::where('organization_id', Auth::id())
+            ->where('user_id', $volunteer->id)
+            ->update(['needs_takeover' => false]);
+
+        ChatbotResponse::create([
+            'user_id' => $volunteer->id,
+            'organization_id' => Auth::id(),
+            'message' => '',
+            'response' => Auth::user()->name.' returned this chat to the VolunteerHub assistant. You can ask me again anytime.',
+            'intent' => 'request_assistant',
+            'confidence' => 1,
+            'needs_takeover' => false,
+            'answered_by' => 'assistant',
+        ]);
+
+        return redirect()->route('org.dashboard', ['section' => 'messages', 'volunteer' => $volunteer->id])
+            ->with('success', 'This chat is back with the assistant for '.$volunteer->name.'.');
+    }
+
+    public function replyToAdmin(Request $request)
+    {
+        $data = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $organization = Auth::user();
+        $body = trim($data['message']);
+
+        PlatformMessage::create([
+            'organization_id' => $organization->id,
+            'sender_id' => $organization->id,
+            'from_admin' => false,
+            'body' => $body,
+        ]);
+
+        PortalNotifier::admins(
+            'Message from '.$organization->name,
+            \Illuminate\Support\Str::limit($body, 140),
+            $organization->name.' wrote: '.$body,
+            'fa-comment',
+            route('admin.dashboard', ['tab' => 'messages', 'org' => $organization->id])
+        );
+
+        return redirect()->route('org.dashboard', ['section' => 'messages', 'with' => 'admin'])
+            ->with('success', 'Message sent to VolunteerHub.');
     }
 
     private function organizationMessageThreads(int $orgId)
@@ -1131,7 +1272,11 @@ class OrgController extends Controller
             $volunteer->setAttribute('with_agent', $conversation?->mode === 'agent');
 
             return $volunteer;
-        })->sortByDesc(fn (User $volunteer) => $volunteer->message_at?->timestamp ?? 0)->values();
+        })->sortBy(function (User $volunteer) {
+            $time = $volunteer->message_at?->getTimestamp() ?? 0;
+
+            return sprintf('%d-%010d', $volunteer->needs_takeover ? 0 : 1, 9999999999 - $time);
+        })->values();
     }
 
     private function volunteerBelongsToOrganization(User $volunteer, int $orgId): bool
@@ -1152,7 +1297,8 @@ class OrgController extends Controller
     }
 
     /**
-     * Launch a new event. Roles are added later from Task Assignment.
+     * Launch a new event. An approved organization publishes it directly.
+     * Tasks are added later from Task Assignment.
      */
     public function storeEvent(Request $request)
     {
@@ -1173,18 +1319,18 @@ class OrgController extends Controller
             'start_time' => Carbon::parse($request->start_time),
             'end_time' => Carbon::parse($request->end_time),
             'capacity' => $request->capacity,
-            'status' => 'draft',
+            'status' => 'published',
         ]);
 
         AuditTrail::record([
             'action' => 'Event created',
             'action_type' => 'created',
             'module' => 'Events',
-            'description' => Auth::user()->name.' submitted "'.$event->title.'" for review.',
+            'description' => Auth::user()->name.' posted "'.$event->title.'".',
             'subject' => $event,
             'subject_label' => $event->title,
             'new' => [
-                'status' => 'draft',
+                'status' => 'published',
                 'location' => $event->location,
                 'start' => $event->start_time?->toDateTimeString(),
                 'end' => $event->end_time?->toDateTimeString(),
@@ -1192,15 +1338,16 @@ class OrgController extends Controller
         ]);
 
         PortalNotifier::admins(
-            'Event awaiting review',
-            Auth::user()->name . ' submitted "' . $event->title . '" for approval.',
-            Auth::user()->name . ' posted "' . $event->title . '" at ' . $event->location . ' on ' . $event->start_time->format('M d, Y g:i A') . '. Volunteers cannot see it until an administrator approves it.',
+            'New event posted',
+            Auth::user()->name.' posted "'.$event->title.'".',
+            Auth::user()->name.' posted "'.$event->title.'" at '.$event->location.' on '.$event->start_time->format('M d, Y g:i A').'. Volunteers in that organization can see it.',
             'fa-calendar-check',
             route('admin.dashboard', ['tab' => 'events', 'org' => Auth::id()])
         );
+        VolunteerNotice::notifyPublishedEvent($event);
 
         return redirect()->route('org.dashboard', ['section' => 'events'])
-            ->with('success', "Event '{$event->title}' was submitted. An admin will review it before volunteers can see it.");
+            ->with('success', "Event '{$event->title}' is live for your volunteers. Add tasks from Task Assignment when you are ready.");
     }
 
     public function updateEvent(Request $request, Event $event)
@@ -1226,13 +1373,7 @@ class OrgController extends Controller
             'capacity' => $event->capacity,
         ];
 
-        $status = $data['status'];
-        if ($event->status === 'draft' && $status !== 'cancelled') {
-            $status = 'draft';
-        }
-        if ($event->status !== 'draft' && $status === 'draft') {
-            $status = $event->status;
-        }
+        $status = $data['status'] === 'draft' ? 'published' : $data['status'];
 
         $event->update([
             'title' => $data['title'],
@@ -1292,12 +1433,62 @@ class OrgController extends Controller
             ->with('success', "Event '{$event->title}' has been updated.");
     }
 
+    public function archiveEvent(Event $event)
+    {
+        abort_unless((int) $event->organization_id === Auth::id(), 403);
+
+        if ($event->status === 'cancelled') {
+            return redirect()->route('org.dashboard', ['section' => 'events'])
+                ->with('error', 'A cancelled event stays on the current list.');
+        }
+
+        if ($event->status !== 'completed') {
+            $event->update(['status' => 'completed']);
+            AuditTrail::record([
+                'action' => 'Event archived',
+                'action_type' => 'updated',
+                'module' => 'Events',
+                'description' => 'Moved "'.$event->title.'" to Archived.',
+                'subject' => $event,
+                'subject_label' => $event->title,
+            ]);
+        }
+
+        return redirect()->route('org.dashboard', ['section' => 'events'])
+            ->with('success', '"'.$event->title.'" is in Archived and no longer appears in Task Assignment.');
+    }
+
+    public function restoreEvent(Event $event)
+    {
+        abort_unless((int) $event->organization_id === Auth::id(), 403);
+
+        if ($event->status !== 'completed') {
+            return redirect()->route('org.dashboard', ['section' => 'events'])
+                ->with('error', 'Only an archived event can be restored.');
+        }
+
+        $event->update(['status' => 'published']);
+        AuditTrail::record([
+            'action' => 'Event restored',
+            'action_type' => 'updated',
+            'module' => 'Events',
+            'description' => 'Restored "'.$event->title.'" to current events.',
+            'subject' => $event,
+            'subject_label' => $event->title,
+        ]);
+
+        return redirect()->route('org.dashboard', ['section' => 'events'])
+            ->with('success', '"'.$event->title.'" is back with current events.');
+    }
+
     public function destroyEvent(Event $event)
     {
         abort_unless((int) $event->organization_id === Auth::id(), 403);
 
         $title = $event->title;
         $previousStatus = $event->status;
+        Assignment::where('event_id', $event->id)->delete();
+        TaskApplication::where('event_id', $event->id)->delete();
         $event->tasks()->delete();
         $event->delete();
 
@@ -1368,8 +1559,15 @@ class OrgController extends Controller
     {
         abort_unless($task->event && (int) $task->event->organization_id === Auth::id(), 403);
 
+        if ($task->status === 'completed' || $task->assignments()->where('status', 'completed')->exists()) {
+            return redirect()->route('org.dashboard', ['section' => 'tasks'])
+                ->with('error', 'A completed task stays with its event.');
+        }
+
         $title = $task->title;
         $eventTitle = $task->event->title ?? 'Event';
+        Assignment::where('task_id', $task->id)->delete();
+        TaskApplication::where('task_id', $task->id)->delete();
         $task->delete();
 
         AuditTrail::record([
@@ -1425,6 +1623,9 @@ class OrgController extends Controller
 
         $task = Task::with(['event', 'skills'])->findOrFail($data['task_id']);
         abort_unless($task->event && (int) $task->event->organization_id === Auth::id(), 403);
+        if (in_array($task->event->status, ['completed', 'cancelled'], true)) {
+            return back()->with('error', 'This event is finished, so its tasks are no longer assigned here.');
+        }
 
         $volunteer = User::where('id', $data['user_id'])
             ->where('role', 'volunteer')
@@ -1433,12 +1634,17 @@ class OrgController extends Controller
             ->with('skills')
             ->firstOrFail();
 
-        $existing = Assignment::with('user')
+        $existing = Assignment::query()
             ->where('event_id', $task->event_id)
             ->where('task_id', $task->id)
             ->first();
-        $previousVolunteer = $existing?->user?->name;
-        $reassigned = $existing && (int) $existing->user_id !== (int) $volunteer->id;
+        // Snapshot IDs before update so the previous assignee cannot be confused with the new one.
+        $previousUserId = $existing ? (int) $existing->user_id : null;
+        $previousUser = ($previousUserId && $previousUserId !== (int) $volunteer->id)
+            ? User::find($previousUserId)
+            : null;
+        $previousVolunteer = $previousUser?->name;
+        $reassigned = $previousUser !== null;
 
         if (!$reassigned && $task->matchedSkillsFor($volunteer)->isEmpty()) {
             return back()->withErrors([
@@ -1461,15 +1667,27 @@ class OrgController extends Controller
                 'submitted_at' => null,
                 'reviewed_at' => null,
                 'reviewed_by' => null,
+                'responded_at' => null,
             ]
         );
+        $assignment = $assignment->fresh(['task', 'event', 'user']) ?? $assignment;
+        $assignment->setRelation('user', $volunteer);
 
         if (!in_array($task->status, ['completed', 'cancelled'], true)) {
             $task->status = 'assigned';
             $task->save();
         }
 
-        VolunteerNotice::notifyAssignment(Auth::user(), $volunteer, $task, $reassigned ? $existing?->user : null);
+        // Reload the assignee by id so mail always targets the selected volunteer.
+        $assignee = User::where('id', $volunteer->id)->where('role', 'volunteer')->firstOrFail();
+
+        VolunteerNotice::notifyAssignment(
+            Auth::user(),
+            $assignee,
+            $task,
+            $previousUser,
+            $assignment
+        );
 
         AuditTrail::record([
             'action' => $reassigned ? 'Task reassigned' : 'Task assigned',
@@ -1507,10 +1725,15 @@ class OrgController extends Controller
         }
         $this->notifyIfEventIsFull($task->event);
 
+        $mailHint = filled($assignee->email)
+            ? ' An assignment email was sent to '.$assignee->email.'.'
+            : ' No email was sent because this volunteer has no email on file.';
+
         return redirect()->route('org.dashboard', ['section' => 'tasks'])
-            ->with('success', $reassigned
-                ? "{$volunteer->name} has been reassigned to '{$task->title}'."
-                : "{$volunteer->name} has been assigned to '{$task->title}'.");
+            ->with('success', ($reassigned
+                ? "{$assignee->name} has been reassigned to '{$task->title}'."
+                : "{$assignee->name} has been assigned to '{$task->title}'.")
+                .$mailHint);
     }
 
     /**
@@ -1661,6 +1884,145 @@ class OrgController extends Controller
     /**
      * Approve a volunteer task application and create the assignment.
      */
+    public function scheduleMembershipInterview(Request $request, OrganizationApplication $application)
+    {
+        abort_unless((int) $application->organization_id === Auth::id(), 403);
+        abort_unless($application->isOpen(), 422);
+
+        $data = $request->validate([
+            'interview_at' => ['required', 'date', 'after:now'],
+            'interview_place' => ['required', 'string', 'max:255'],
+            'interview_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $application->update([
+            'status' => 'interview_scheduled',
+            'interview_mode' => 'personal',
+            'interview_at' => Carbon::parse($data['interview_at']),
+            'interview_place' => $data['interview_place'],
+            'interview_notes' => $data['interview_notes'] ?? null,
+        ]);
+
+        $volunteer = $application->user;
+        $when = $application->interview_at->timezone(\App\Support\ScheduleClock::ZONE)->format('M j, Y g:i A');
+
+        PortalNotifier::send(
+            (int) $volunteer->id,
+            'Personal interview scheduled',
+            Auth::user()->name.' set your interview for '.$when.'.',
+            Auth::user()->name.' scheduled your personal interview for '.$when.' at '.$application->interview_place.'.'
+                .($application->interview_notes ? "\n\nNotes: ".$application->interview_notes : ''),
+            'fa-calendar-check',
+            route('volunteer.dashboard'),
+            ['category' => 'membership']
+        );
+
+        AuditTrail::record([
+            'action' => 'Membership interview scheduled',
+            'action_type' => 'updated',
+            'module' => 'Volunteers',
+            'description' => 'Scheduled a personal interview with '.$volunteer->name.' for '.$when.'.',
+            'subject' => $volunteer,
+            'subject_label' => $volunteer->name,
+            'new' => [
+                'interview_at' => $application->interview_at?->toDateTimeString(),
+                'interview_place' => $application->interview_place,
+            ],
+        ]);
+
+        return redirect()->route('org.dashboard', ['section' => 'volunteers'])
+            ->with('success', 'Personal interview scheduled with '.$volunteer->name.'.');
+    }
+
+    public function approveMembershipApplication(OrganizationApplication $application)
+    {
+        abort_unless((int) $application->organization_id === Auth::id(), 403);
+        abort_unless($application->isOpen(), 422);
+
+        $volunteer = $application->user()->firstOrFail();
+
+        $application->update([
+            'status' => 'approved',
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+            'feedback' => null,
+        ]);
+
+        $volunteer->update([
+            'organization_id' => Auth::id(),
+            'membership_fee_paid_at' => $volunteer->membership_fee_paid_at ?? now(),
+            'membership_attended_at' => $volunteer->membership_attended_at ?? now(),
+        ]);
+
+        PortalNotifier::send(
+            (int) $volunteer->id,
+            'Membership approved',
+            'You are now a member of '.Auth::user()->name.'.',
+            'You are now a member of '.Auth::user()->name.' after your personal interview.',
+            'fa-user-check',
+            route('volunteer.dashboard'),
+            ['category' => 'membership']
+        );
+
+        AuditTrail::record([
+            'action' => 'Membership application approved',
+            'action_type' => 'approved',
+            'module' => 'Volunteers',
+            'description' => 'Approved '.$volunteer->name.' as a member after interview.',
+            'subject' => $volunteer,
+            'subject_label' => $volunteer->name,
+            'previous' => ['application' => 'open'],
+            'new' => ['application' => 'approved', 'organization_id' => Auth::id()],
+        ]);
+
+        return redirect()->route('org.dashboard', ['section' => 'volunteers'])
+            ->with('success', $volunteer->name.' is now a member of your organization.');
+    }
+
+    public function rejectMembershipApplication(Request $request, OrganizationApplication $application)
+    {
+        abort_unless((int) $application->organization_id === Auth::id(), 403);
+        abort_unless($application->isOpen(), 422);
+
+        $data = $request->validate([
+            'feedback' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $volunteer = $application->user()->firstOrFail();
+        $feedback = $data['feedback'] ?? 'Your membership application was not approved at this time.';
+
+        $application->update([
+            'status' => 'rejected',
+            'feedback' => $feedback,
+            'reviewed_by' => Auth::id(),
+            'reviewed_at' => now(),
+        ]);
+
+        PortalNotifier::send(
+            (int) $volunteer->id,
+            'Membership application update',
+            'Your application to '.Auth::user()->name.' was not approved.',
+            $feedback,
+            'fa-circle-xmark',
+            route('volunteer.dashboard'),
+            ['category' => 'membership']
+        );
+
+        AuditTrail::record([
+            'action' => 'Membership application rejected',
+            'action_type' => 'rejected',
+            'module' => 'Volunteers',
+            'description' => 'Rejected membership application from '.$volunteer->name.'.',
+            'subject' => $volunteer,
+            'subject_label' => $volunteer->name,
+            'previous' => ['application' => 'open'],
+            'new' => ['application' => 'rejected'],
+        ]);
+
+        return redirect()->route('org.dashboard', ['section' => 'volunteers'])
+            ->with('success', 'Membership application from '.$volunteer->name.' was declined.');
+    }
+
     public function approveApplication(TaskApplication $application)
     {
         $application->load(['task.event', 'user']);
@@ -1887,6 +2249,37 @@ class OrgController extends Controller
         ]);
 
         return Storage::disk('public')->download($path, $filename);
+    }
+
+    /**
+     * Delete an uploaded compliance document owned by the organization.
+     */
+    public function destroyDocument(RecordArchive $document)
+    {
+        abort_unless(
+            $document->table_name === 'compliance_documents' && (int) $document->archived_by === Auth::id(),
+            403
+        );
+
+        $filename = $document->original_data['filename'] ?? 'Document';
+        $path = $document->original_data['file_path'] ?? null;
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
+
+        $document->delete();
+
+        AuditTrail::record([
+            'action' => 'Compliance document deleted',
+            'action_type' => 'deleted',
+            'module' => 'Organizations',
+            'description' => Auth::user()->name.' deleted "'.$filename.'".',
+            'subject_label' => $filename,
+            'previous' => ['filename' => $filename],
+        ]);
+
+        return redirect()->route('org.dashboard', ['section' => 'settings', 'pane' => 'documents'])
+            ->with('success', "Document '{$filename}' was deleted.");
     }
 
     /**
@@ -2175,15 +2568,20 @@ class OrgController extends Controller
         abort_unless($certificate->event && (int) $certificate->event->organization_id === Auth::id(), 403);
 
         AuditTrail::record([
-            'action' => 'Certificate opened',
+            'action' => 'Certificate downloaded',
             'action_type' => 'other',
             'module' => 'Certificates',
-            'description' => 'Opened the certificate for '.($certificate->user->name ?? 'a volunteer').' on "'.($certificate->event->title ?? 'an event').'".',
+            'description' => 'Downloaded the certificate for '.($certificate->user->name ?? 'a volunteer').' on "'.($certificate->event->title ?? 'an event').'".',
             'subject' => $certificate,
             'subject_label' => $certificate->event->title ?? 'Certificate',
         ]);
 
-        return view('volunteer.certificate', compact('certificate'));
+        $code = preg_replace('/[^A-Za-z0-9._-]+/', '-', (string) $certificate->certificate_code) ?: 'certificate';
+
+        return response(CertificatePdf::make($certificate), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$code.'.pdf"',
+        ]);
     }
 
     /**

@@ -9,30 +9,14 @@
             }
         </style>
 
-        <!-- Mobile top bar -->
-        <div class="md:hidden bg-white text-slate-800 p-4 flex items-center justify-between border-b border-slate-200 sticky top-0 z-40">
-            <div class="flex items-center gap-2.5">
-                <span class="h-9 w-9 rounded-xl bg-jci-blue text-white flex items-center justify-center shadow-sm">
-                    <i class="fa-solid fa-shield-halved text-sm"></i>
-                </span>
-                <div>
-                    <h2 class="font-extrabold text-sm tracking-tight leading-none">VolunteerHub</h2>
-                    <p class="text-[9px] text-jci-blue uppercase tracking-widest font-bold mt-0.5">Admin</p>
-                </div>
-            </div>
-            <button type="button" onclick="document.getElementById('admin-sidebar').classList.toggle('hidden')" class="p-2 bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 text-xs">
-                <i class="fa-solid fa-bars text-sm"></i>
-            </button>
-        </div>
+        <div id="admin-sidebar-backdrop" class="fixed inset-0 z-40 hidden bg-slate-900/40 md:hidden"></div>
 
         <!-- Sidebar -->
-        <aside id="admin-sidebar" class="hidden md:flex w-full md:w-60 md:h-screen bg-white text-slate-600 flex-col justify-between border-r border-slate-200 shrink-0 overflow-y-auto dark:bg-[#0c1222] dark:border-slate-800">
+        <aside id="admin-sidebar" class="flex w-60 h-full md:h-screen bg-white text-slate-600 flex-col justify-between border-r border-slate-200 shrink-0 overflow-y-auto dark:bg-[#0c1222] dark:border-slate-800 max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:-translate-x-full max-md:transition-transform max-md:duration-200">
             <div>
-                <div class="px-5 py-5 border-b border-slate-200 hidden md:flex items-center gap-3 dark:border-slate-800">
-                    <span class="h-10 w-10 rounded-xl bg-jci-blue text-white flex items-center justify-center shadow-md shadow-sky-500/30">
-                        <i class="fa-solid fa-shield-halved"></i>
-                    </span>
-                    <div>
+                <div class="px-5 py-5 border-b border-slate-200 flex items-center gap-3 dark:border-slate-800">
+                    <x-ui.brand-mark />
+                    <div class="min-w-0">
                         <h2 class="font-extrabold text-sm tracking-tight text-slate-900 leading-none">VolunteerHub</h2>
                         <p class="text-[10px] text-jci-blue uppercase tracking-[0.18em] font-bold mt-1">Admin</p>
                     </div>
@@ -76,16 +60,10 @@
                         <i class="fa-solid fa-calendar-days text-sm w-4"></i> Events
                         @php
                             $postedEventTotal = \App\Models\Event::count();
-                            $eventsAwaitingReview = \App\Models\Event::where('status', 'draft')->count();
                         @endphp
-                        <span class="ml-auto flex items-center gap-1">
-                            @if ($eventsAwaitingReview > 0)
-                                <span class="{{ $activeTab === 'events' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700' }} text-[10px] px-2 py-0.5 rounded-full font-black" title="Waiting for approval">{{ $eventsAwaitingReview }}</span>
-                            @endif
-                            @if ($postedEventTotal > 0)
-                                <span class="{{ $activeTab === 'events' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $postedEventTotal }}</span>
-                            @endif
-                        </span>
+                        @if ($postedEventTotal > 0)
+                            <span class="ml-auto {{ $activeTab === 'events' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $postedEventTotal }}</span>
+                        @endif
                     </a>
 
                     <a href="{{ route('admin.dashboard', ['tab' => 'tasks']) }}"
@@ -96,6 +74,17 @@
                         @endphp
                         @if ($postedTaskTotal > 0)
                             <span class="ml-auto {{ $activeTab === 'tasks' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $postedTaskTotal }}</span>
+                        @endif
+                    </a>
+
+                    <a href="{{ route('admin.dashboard', ['tab' => 'messages']) }}"
+                       class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all {{ $activeTab === 'messages' ? 'text-white bg-jci-blue shadow-md shadow-sky-500/25' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800' }}">
+                        <i class="fa-solid fa-comment text-sm w-4"></i> Messages
+                        @php
+                            $adminMessageUnread = \App\Models\PlatformMessage::where('from_admin', false)->whereNull('read_at')->count();
+                        @endphp
+                        @if ($adminMessageUnread > 0)
+                            <span class="ml-auto {{ $activeTab === 'messages' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-600' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $adminMessageUnread }}</span>
                         @endif
                     </a>
 
@@ -156,10 +145,13 @@
                     <button type="button" id="admin-sidebar-show" class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-jci-blue hover:border-jci-blue" title="Show sidebar">
                         <i class="fa-solid fa-bars text-sm"></i>
                     </button>
+                    <button type="button" id="admin-sidebar-toggle" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-jci-blue hover:border-jci-blue md:hidden" title="Show sidebar">
+                        <i class="fa-solid fa-bars text-sm"></i>
+                    </button>
                     <div class="min-w-0">
                     @if($activeTab === 'volunteers')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Volunteers</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Events joined, completed tasks, rewards, and membership</p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Roster, org links, completed work, and rewards</p>
                     @elseif($activeTab === 'users')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">User Lists</h3>
                         <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">All organization and volunteer accounts, including activity and organization links.</p>
@@ -168,22 +160,25 @@
                         <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Verify and manage socio-civic organizations</p>
                     @elseif($activeTab === 'events')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Events</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Review, approve, and monitor events from every organization</p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Browse and filter events posted by organizations</p>
                     @elseif($activeTab === 'tasks')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Tasks</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Monitor deadlines, assigned volunteers, and task completion</p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Deadlines, assignments, overdue notices, and completion</p>
                     @elseif($activeTab === 'reports')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Reports</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Period, category, and export from recorded activity</p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Activity for the selected period</p>
                     @elseif($activeTab === 'audit')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Audit Logs</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Immutable record of actions across the portal</p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Search, filter, and export the immutable activity trail</p>
                     @elseif($activeTab === 'notifications')
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Notifications</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Full notices from registrations, events, tasks, and documents</p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Inbox, unread filters, and attention queues for this admin account</p>
+                    @elseif($activeTab === 'messages')
+                        <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Messages</h3>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Write directly to an organization</p>
                     @elseif($activeTab === 'profile')
-                        <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">My Profile</h3>
-                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">{{ Auth::user()->name }} · System Admin</p>
+                        <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Profile</h3>
+                        <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Account details, security, and recent admin activity</p>
                     @else
                         <h3 class="font-extrabold text-base sm:text-lg text-slate-900 truncate">Admin Command Center</h3>
                         <p class="text-[11px] sm:text-xs text-slate-400 font-medium truncate">Region XIII Surigao</p>
@@ -229,20 +224,51 @@
     <script>
         (function () {
             const shell = document.getElementById('admin-shell');
+            const sidebar = document.getElementById('admin-sidebar');
+            const backdrop = document.getElementById('admin-sidebar-backdrop');
             const hideButton = document.getElementById('admin-sidebar-hide');
             const showButton = document.getElementById('admin-sidebar-show');
-            if (!shell || !hideButton || !showButton) {
+            const mobileToggle = document.getElementById('admin-sidebar-toggle');
+            if (!shell || !sidebar) {
                 return;
             }
             const apply = function (hidden) {
                 shell.classList.toggle('is-sidebar-hidden', hidden);
                 localStorage.setItem('admin-sidebar-hidden', hidden ? '1' : '0');
             };
-            if (localStorage.getItem('admin-sidebar-hidden') === '1') {
+            if (localStorage.getItem('admin-sidebar-hidden') === '1' && window.matchMedia('(min-width: 768px)').matches) {
                 apply(true);
             }
-            hideButton.addEventListener('click', function () { apply(true); });
-            showButton.addEventListener('click', function () { apply(false); });
+            if (hideButton) {
+                hideButton.addEventListener('click', function () { apply(true); });
+            }
+            if (showButton) {
+                showButton.addEventListener('click', function () { apply(false); });
+            }
+
+            function closeMobile() {
+                sidebar.classList.add('max-md:-translate-x-full');
+                if (backdrop) backdrop.classList.add('hidden');
+            }
+            function openMobile() {
+                sidebar.classList.remove('max-md:-translate-x-full');
+                if (backdrop) backdrop.classList.remove('hidden');
+            }
+            if (mobileToggle) {
+                mobileToggle.addEventListener('click', function () {
+                    if (sidebar.classList.contains('max-md:-translate-x-full')) {
+                        openMobile();
+                    } else {
+                        closeMobile();
+                    }
+                });
+            }
+            if (backdrop) {
+                backdrop.addEventListener('click', closeMobile);
+            }
+            sidebar.querySelectorAll('a').forEach(function (link) {
+                link.addEventListener('click', closeMobile);
+            });
         })();
         (function () {
             const root = document.documentElement;

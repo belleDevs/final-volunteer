@@ -1,9 +1,4 @@
 <div class="space-y-6">
-    <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Certificates</h1>
-        <p class="mt-1 text-sm text-slate-500">Certificates issued to you. View opens the certificate. Download PDF saves the file.</p>
-    </div>
-
     <section class="space-y-3">
         @forelse($certificates as $certificate)
             <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">

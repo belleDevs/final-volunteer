@@ -1,20 +1,7 @@
+@php
+    $showPhotoDialog = $errors->hasAny(['photos', 'photos.*', 'event_id']);
+@endphp
 <div class="space-y-6">
-    <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Gallery</h1>
-        <p class="mt-1 text-sm text-slate-500">One album for each event, titled with the event and its date.</p>
-    </div>
-
-    @if(session('success'))
-        <p class="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{{ session('success') }}</p>
-    @endif
-    @if($errors->any())
-        <div class="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            @foreach($errors->all() as $error)
-                <p>{{ $error }}</p>
-            @endforeach
-        </div>
-    @endif
-
     @if($galleryEvents->isEmpty())
         <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
             <p class="text-sm font-medium text-slate-700 dark:text-slate-200">No events yet</p>
@@ -52,18 +39,12 @@
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ $openGalleryEvent->title }}</h2>
                         <p class="text-sm text-slate-500">{{ $openWhen }}@if($openGalleryEvent->location) · {{ $openGalleryEvent->location }}@endif</p>
+                        <p class="text-sm text-slate-500">{{ $openGalleryEvent->photos->count() }} {{ \Illuminate\Support\Str::plural('photo', $openGalleryEvent->photos->count()) }}</p>
                     </div>
-                    <details class="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                        <summary class="cursor-pointer list-none px-4 py-2 text-sm font-semibold text-jci-blue [&::-webkit-details-marker]:hidden">Add photos</summary>
-                        <form action="{{ route('org.gallery.store') }}" method="POST" enctype="multipart/form-data" class="space-y-3 border-t border-slate-100 p-4 dark:border-slate-800">
-                            @csrf
-                            <input type="hidden" name="event_id" value="{{ $openGalleryEvent->id }}">
-                            <label class="block text-sm text-slate-600 dark:text-slate-300">Pictures
-                                <input name="photos[]" type="file" required multiple accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full text-xs">
-                            </label>
-                            <button type="submit" class="rounded-xl bg-jci-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-jci-dark">Save photos</button>
-                        </form>
-                    </details>
+                    <button type="button" data-open-dialog="add-photos-dialog" class="inline-flex items-center justify-center gap-2 rounded-xl bg-jci-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-jci-dark">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        Add photos
+                    </button>
                 </div>
 
                 @if($openGalleryEvent->photos->isEmpty())
@@ -89,3 +70,106 @@
         @endif
     @endif
 </div>
+
+@if($openGalleryEvent)
+    <div id="add-photos-dialog" class="fixed inset-0 z-[999] items-center justify-center p-4 {{ $showPhotoDialog ? 'flex' : 'hidden' }}" role="dialog" aria-modal="true" aria-labelledby="add-photos-title">
+        <button type="button" class="absolute inset-0 bg-slate-950/50" data-close-dialog="add-photos-dialog" aria-label="Close"></button>
+        <div class="relative w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 id="add-photos-title" class="text-lg font-semibold text-slate-900 dark:text-white">Add photos</h3>
+                    <p class="mt-1 text-sm text-slate-500">{{ $openGalleryEvent->title }}</p>
+                </div>
+                <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800" data-close-dialog="add-photos-dialog" aria-label="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form action="{{ route('org.gallery.store') }}" method="POST" enctype="multipart/form-data" class="mt-5 space-y-4">
+                @csrf
+                <input type="hidden" name="event_id" value="{{ $openGalleryEvent->id }}">
+                <label class="flex cursor-pointer items-center gap-4 rounded-2xl border border-dashed border-slate-300 p-4 transition hover:border-jci-blue dark:border-slate-600">
+                    <span class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800">
+                        <i class="fa-solid fa-images"></i>
+                    </span>
+                    <span class="min-w-0">
+                        <span class="block text-sm font-semibold text-slate-800 dark:text-slate-100">Pictures</span>
+                        <span id="gallery-photo-name" class="mt-0.5 block text-xs text-slate-500">JPG, PNG, or WEBP. Up to 12.</span>
+                    </span>
+                    <input id="gallery-photos" name="photos[]" type="file" required multiple accept="image/jpeg,image/png,image/webp" class="sr-only">
+                </label>
+                <div id="gallery-photo-previews" class="grid grid-cols-4 gap-2 empty:hidden"></div>
+                @error('photos')
+                    <p class="text-xs text-rose-600">{{ $message }}</p>
+                @enderror
+                @error('photos.*')
+                    <p class="text-xs text-rose-600">{{ $message }}</p>
+                @enderror
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" data-close-dialog="add-photos-dialog">Cancel</button>
+                    <button type="submit" class="rounded-xl bg-jci-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-jci-dark">Save photos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endif
+
+<script>
+    (function () {
+        document.querySelectorAll('[role="dialog"]').forEach(function (dialog) {
+            document.body.appendChild(dialog);
+        });
+
+        const openDialog = function (id) {
+            const dialog = document.getElementById(id);
+            if (!dialog) return;
+            dialog.classList.remove('hidden');
+            dialog.classList.add('flex');
+        };
+        const closeDialog = function (id) {
+            const dialog = document.getElementById(id);
+            if (!dialog) return;
+            dialog.classList.add('hidden');
+            dialog.classList.remove('flex');
+        };
+
+        document.querySelectorAll('[data-open-dialog]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                openDialog(button.getAttribute('data-open-dialog'));
+            });
+        });
+        document.querySelectorAll('[data-close-dialog]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                closeDialog(button.getAttribute('data-close-dialog'));
+            });
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            document.querySelectorAll('[role="dialog"].flex').forEach(function (dialog) {
+                closeDialog(dialog.id);
+            });
+        });
+
+        const input = document.getElementById('gallery-photos');
+        input?.addEventListener('change', function () {
+            const files = Array.from(input.files || []).slice(0, 12);
+            const label = document.getElementById('gallery-photo-name');
+            const previews = document.getElementById('gallery-photo-previews');
+            if (!label || !previews) return;
+            label.textContent = files.length === 0
+                ? 'JPG, PNG, or WEBP. Up to 12.'
+                : files.length + (files.length === 1 ? ' picture selected' : ' pictures selected');
+            previews.replaceChildren();
+            files.forEach(function (file) {
+                const image = document.createElement('img');
+                image.alt = '';
+                image.className = 'aspect-square w-full rounded-xl object-cover';
+                previews.appendChild(image);
+                const reader = new FileReader();
+                reader.onload = function () {
+                    image.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+    })();
+</script>

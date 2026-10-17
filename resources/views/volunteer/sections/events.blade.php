@@ -4,72 +4,90 @@
         'all' => 'All',
         'upcoming' => 'Upcoming',
         'ongoing' => 'Ongoing',
+        'ended' => 'Ended',
         'completed' => 'Completed',
         'cancelled' => 'Cancelled',
     ];
 @endphp
 
-<div class="space-y-6">
-    <div>
-        <h1 class="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">My Events</h1>
-        <p class="mt-1 text-sm text-slate-500">Events connected to your assignments. Times are the saved schedule.</p>
+<div class="space-y-5">
+    <div class="relative max-w-md">
+        <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-xs text-slate-300"></i>
+        <input id="volunteer-event-search" type="search" value="{{ $eventSearch }}" placeholder="Search events" class="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-700 focus:border-jci-blue focus:outline-none focus:ring-2 focus:ring-jci-blue/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
     </div>
 
-    <form method="GET" action="{{ route('volunteer.dashboard') }}" class="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-2 lg:grid-cols-5">
-        <input type="hidden" name="section" value="events">
-        <label class="block text-xs text-slate-500 lg:col-span-2">
-            Search
-            <input type="search" name="q" value="{{ $eventSearch }}" placeholder="Title, place, or description" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-        </label>
-        <label class="block text-xs text-slate-500">
-            Status
-            <select name="state" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-                @foreach($buckets as $value => $label)
-                    <option value="{{ $value }}" @selected($eventState === $value)>{{ $label }}</option>
-                @endforeach
-            </select>
-        </label>
-        <label class="block text-xs text-slate-500">
-            From
-            <input type="date" name="from" value="{{ $eventFrom }}" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-        </label>
-        <label class="block text-xs text-slate-500">
-            To
-            <input type="date" name="to" value="{{ $eventTo }}" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-        </label>
-        <div class="sm:col-span-2 lg:col-span-5">
-            <button type="submit" class="rounded-lg bg-jci-blue px-3 py-2 text-xs font-semibold text-white">Apply filters</button>
-        </div>
-    </form>
+    <div class="flex flex-wrap gap-2">
+        @foreach($buckets as $value => $label)
+            <a href="{{ route('volunteer.dashboard', array_filter(['section' => 'events', 'state' => $value === 'all' ? null : $value, 'q' => $eventSearch !== '' ? $eventSearch : null, 'from' => $eventFrom !== '' ? $eventFrom : null, 'to' => $eventTo !== '' ? $eventTo : null])) }}"
+               class="rounded-full px-3 py-1.5 text-xs font-semibold {{ $eventState === $value || ($value === 'all' && in_array($eventState, ['', 'all'], true)) ? 'bg-jci-blue text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:text-jci-blue dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700' }}">{{ $label }}</a>
+        @endforeach
+    </div>
 
-    <section class="space-y-4">
+    <section class="space-y-3">
         @forelse($eventList as $event)
             @php
-                $bucket = $event->event_bucket;
-                $bucketLabel = $buckets[$bucket] ?? ucfirst($bucket);
+                $statusLabel = $event->status_label ?? ($buckets[$event->event_bucket] ?? ucfirst((string) $event->event_bucket));
+                $when = $clock::range($event->start_time, $event->end_time);
+                $roles = $event->duty_titles ?? collect();
+                $duties = collect($event->duty_details ?? []);
+                $capacityLabel = $event->capacity ? 'Maximum '.$event->capacity.' volunteers' : 'No volunteer limit';
+                $search = strtolower($event->title.' '.$event->description.' '.$event->location.' '.$statusLabel.' '.$roles->join(' ').' '.$event->participation);
             @endphp
-            <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h2 class="text-base font-semibold text-slate-900 dark:text-white">{{ $event->title }}</h2>
-                        <p class="mt-1 text-xs text-slate-500">{{ $clock::range($event->start_time, $event->end_time) }}</p>
-                        @if($event->location)
-                            <p class="mt-1 text-xs text-slate-400">{{ $event->location }}</p>
-                        @endif
+            <article data-volunteer-event data-search="{{ $search }}" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="text-base font-semibold text-slate-900 dark:text-white">{{ $event->title }}</h2>
+                            <x-ui.status-badge :label="$statusLabel" />
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">{{ $when }}@if(filled($event->location)) · {{ $event->location }}@endif</p>
+                        <p class="mt-1 text-xs text-slate-400">{{ $capacityLabel }}</p>
                     </div>
-                    <span class="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-medium text-slate-500">{{ $bucketLabel }}</span>
+                    <button type="button"
+                            class="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:text-slate-200"
+                            data-modal-id="modal-volunteer-event-details"
+                            data-title="{{ $event->title }}"
+                            data-when="{{ $when }}"
+                            data-where="{{ $event->location }}"
+                            data-status="{{ $statusLabel }}"
+                            data-volunteers="{{ $capacityLabel }}"
+                            data-note="{{ \Illuminate\Support\Str::limit(preg_replace('/\s+/', ' ', (string) $event->description), 400) }}"
+                            data-duties='@json($duties)'
+                            onclick="openVolunteerEventDetails(this)">View details</button>
                 </div>
-                <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">Your role: {{ $event->duty_titles->join(', ') ?: 'Assigned' }}</p>
-                <p class="mt-1 text-xs text-slate-400">Participation: {{ $event->participation }}</p>
-                <details class="mt-4">
-                    <summary class="cursor-pointer text-xs font-semibold text-jci-blue">View details</summary>
-                    <div class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-                        <p>{{ $event->description ?: 'No description or instructions were saved for this event.' }}</p>
-                    </div>
-                </details>
             </article>
         @empty
-            <p class="rounded-2xl border border-dashed border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-400 dark:border-slate-800 dark:bg-slate-900">No events match your participation or the current filters.</p>
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
+                <p class="text-sm font-medium text-slate-700 dark:text-slate-200">No events match</p>
+                <p class="mt-1 text-xs text-slate-400">Events appear here after you are assigned a task on one.</p>
+            </div>
         @endforelse
+        <p id="volunteer-event-search-empty" class="hidden rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-900">No events match that search.</p>
     </section>
 </div>
+
+<x-ui.event-details-modal id="modal-volunteer-event-details" duties-heading="Your task assignments" />
+
+<script>
+    (function () {
+        const search = document.getElementById('volunteer-event-search');
+        if (!search) {
+            return;
+        }
+        search.addEventListener('input', function () {
+            const query = search.value.trim().toLowerCase();
+            let shown = 0;
+            document.querySelectorAll('[data-volunteer-event]').forEach(function (card) {
+                const hit = query === '' || (card.dataset.search || '').includes(query);
+                card.classList.toggle('hidden', !hit);
+                if (hit) {
+                    shown += 1;
+                }
+            });
+            const empty = document.getElementById('volunteer-event-search-empty');
+            if (empty) {
+                empty.classList.toggle('hidden', shown > 0 || {{ $eventList->isEmpty() ? 'true' : 'false' }});
+            }
+        });
+    })();
+</script>

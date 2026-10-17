@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ScheduleClock;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -52,7 +53,7 @@ class Event extends Model
     }
 
     /**
-     * Admin oversight status. Draft events stay private until approved.
+     * Schedule state for a posted event. Draft remains only for older records.
      */
     public function oversightStatus(): string
     {
@@ -68,11 +69,13 @@ class Event extends Model
             return 'completed';
         }
 
-        if ($this->start_time && $this->start_time->isFuture()) {
-            return 'upcoming';
-        }
+        $phase = ScheduleClock::phase($this->start_time, $this->end_time, $this->status);
 
-        return 'ongoing';
+        return match ($phase) {
+            'upcoming' => 'upcoming',
+            'past' => 'ended',
+            default => 'ongoing',
+        };
     }
 
     public function oversightLabel(): string
@@ -80,6 +83,7 @@ class Event extends Model
         return match ($this->oversightStatus()) {
             'upcoming' => 'Upcoming',
             'ongoing' => 'Ongoing',
+            'ended' => 'Ended',
             'completed' => 'Completed',
             'cancelled' => 'Cancelled',
             default => 'Needs review',

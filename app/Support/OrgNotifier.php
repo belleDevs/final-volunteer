@@ -54,7 +54,14 @@ class OrgNotifier
                 'url' => $url,
                 'action' => $action,
                 'dedupe' => $dedupe,
-                'icon' => 'fa-bell',
+                'icon' => match ($category) {
+                    'event' => 'fa-calendar',
+                    'task' => 'fa-list-check',
+                    'volunteer' => 'fa-user',
+                    'account' => 'fa-id-card',
+                    'certificate' => 'fa-certificate',
+                    default => 'fa-bell',
+                },
             ]),
             'read_at' => null,
             'dismissed_at' => null,
@@ -95,23 +102,76 @@ class OrgNotifier
         }
 
         return $query->limit(100)->get()->map(function ($row) {
+            return self::present($row);
+        });
+    }
+
+    public static function recent(int $organizationId, int $limit = 6): Collection
+    {
+        return self::base($organizationId)
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->map(function ($row) {
+                return self::present($row);
+            });
+    }
+
+    /**
+     * @return array{all: int, unread: int, event: int, task: int, volunteer: int, account: int, certificate: int, system: int}
+     */
+    public static function counts(int $organizationId): array
+    {
+        $counts = [
+            'all' => 0,
+            'unread' => 0,
+            'event' => 0,
+            'task' => 0,
+            'volunteer' => 0,
+            'account' => 0,
+            'certificate' => 0,
+            'system' => 0,
+        ];
+
+        foreach (self::base($organizationId)->get(['data', 'read_at']) as $row) {
             $data = json_decode($row->data, true) ?: [];
             $category = $data['category'] ?? self::inferCategory((string) ($data['title'] ?? ''));
-            $data['category'] = $category;
-            if (empty($data['url'])) {
-                $data['url'] = self::fallbackUrl($category);
-                $data['action'] = $data['action'] ?? 'Open';
+            if (!isset(self::CATEGORIES[$category])) {
+                $category = 'system';
             }
-            $row->payload = $data;
-            $row->category_label = self::CATEGORIES[$category] ?? 'System';
+            $counts['all']++;
+            $counts[$category]++;
+            if ($row->read_at === null) {
+                $counts['unread']++;
+            }
+        }
 
-            return $row;
-        });
+        return $counts;
     }
 
     public static function owned(int $organizationId, string $id): ?object
     {
         return self::base($organizationId)->where('id', $id)->first();
+    }
+
+    private static function present(object $row): object
+    {
+        $data = json_decode($row->data, true) ?: [];
+        $category = $data['category'] ?? self::inferCategory((string) ($data['title'] ?? ''));
+        if (!isset(self::CATEGORIES[$category])) {
+            $category = 'system';
+        }
+        $data['category'] = $category;
+        if (empty($data['url'])) {
+            $data['url'] = self::fallbackUrl($category);
+            $data['action'] = $data['action'] ?? 'Open';
+        }
+        $row->data = $data;
+        $row->payload = $data;
+        $row->category_label = self::CATEGORIES[$category];
+        $row->created_at = Carbon::parse($row->created_at);
+
+        return $row;
     }
 
     private static function inferCategory(string $title): string

@@ -1,17 +1,27 @@
 @props(['color' => 'default'])
 
 @php
-    $notifications = Auth::user() ? Auth::user()->notifications()->orderBy('created_at', 'desc')->take(6)->get() : collect();
-    $unreadCount = Auth::user() ? Auth::user()->unreadNotifications()->count() : 0;
-    
-    $btnClasses = $color === 'white' 
-        ? 'relative p-2 text-slate-200 hover:text-white rounded-full hover:bg-white/10 transition focus:outline-none flex items-center justify-center'
-        : 'relative p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition focus:outline-none flex items-center justify-center';
+    $isOrganization = Auth::user()?->role === 'organization';
+    if ($isOrganization) {
+        $notifications = \App\Support\OrgNotifier::recent((int) Auth::id());
+        $unreadCount = \App\Support\OrgNotifier::unreadCount((int) Auth::id());
+    } else {
+        $notifications = Auth::user() ? Auth::user()->notifications()->orderBy('created_at', 'desc')->take(6)->get() : collect();
+        $unreadCount = Auth::user() ? Auth::user()->unreadNotifications()->count() : 0;
+    }
+
+    $btnClasses = $color === 'white'
+        ? 'relative flex h-9 w-9 items-center justify-center rounded-full text-slate-200 transition hover:bg-white/10 hover:text-white focus:outline-none'
+        : 'relative flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-jci-blue focus:outline-none dark:text-slate-300 dark:hover:bg-slate-800';
+    $noticeIndex = Auth::user()?->role === 'admin'
+        ? route('admin.dashboard', ['tab' => 'notifications'])
+        : ($isOrganization
+            ? route('org.dashboard', ['section' => 'notifications'])
+            : (Auth::user()?->role === 'volunteer' ? route('volunteer.dashboard', ['section' => 'notifications']) : null));
 @endphp
 
 <div class="relative inline-block text-left" id="notifications-bell-dropdown-wrapper">
-    <!-- Bell Button -->
-    <button type="button" onclick="toggleNotificationsDropdown(event)" 
+    <button type="button" onclick="toggleNotificationsDropdown(event)" aria-label="Notifications"
             class="{{ $btnClasses }}">
         <i class="fa-solid fa-bell text-lg"></i>
         @if ($unreadCount > 0)
@@ -21,22 +31,19 @@
         @endif
     </button>
 
-    <!-- Dropdown Menu -->
-    <div id="notifications-dropdown-menu" 
-         class="hidden absolute right-0 mt-3 w-80 max-w-[88vw] bg-white rounded-3xl border border-slate-100 shadow-2xl z-[999] overflow-hidden transform origin-top-right transition-all duration-200">
-        <!-- Header -->
-        <div class="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-            <h4 class="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <i class="fa-solid fa-bell text-jci-blue text-xs"></i> Notifications
+    <div id="notifications-dropdown-menu"
+         class="absolute right-0 z-[999] mt-3 hidden w-[min(20rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] origin-top-right overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
+            <h4 class="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-100">
+                <i class="fa-solid fa-bell text-xs text-jci-blue"></i> Notifications
             </h4>
             @if ($unreadCount > 0)
-                <span class="bg-blue-50 text-jci-blue text-[9px] font-bold px-2 py-0.5 rounded-lg" id="notifications-unread-label">
+                <span class="rounded-lg bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-jci-blue dark:bg-sky-950" id="notifications-unread-label">
                     {{ $unreadCount }} New
                 </span>
             @endif
         </div>
 
-        <!-- List -->
         <div class="max-h-72 overflow-y-auto divide-y divide-slate-100 custom-scrollbar" id="notifications-list-container">
             @if ($notifications->count() > 0)
                 @foreach ($notifications as $notif)
@@ -49,33 +56,32 @@
                         $isUnread = is_null($notif->read_at);
                         $noticeUrl = Auth::user()?->role === 'admin'
                             ? route('admin.dashboard', ['tab' => 'notifications', 'notice' => $notif->id])
-                            : ($notifData['url'] ?? null);
+                            : ($isOrganization
+                                ? route('org.notifications.open', $notif->id)
+                                : ($notifData['url'] ?? null));
+                        $itemClass = 'p-4 flex gap-3 hover:bg-slate-50/60 transition group relative cursor-pointer '.($isUnread ? 'bg-blue-50/10' : '');
                     @endphp
                     @if($noticeUrl)
-                        <a href="{{ $noticeUrl }}" class="p-4 flex gap-3 hover:bg-slate-50/60 transition group relative {{ $isUnread ? 'bg-blue-50/10' : '' }}"
-                           id="notification-item-{{ $notif->id }}">
+                        <a href="{{ $noticeUrl }}"
+                           class="{{ $itemClass }}"
+                           id="notification-item-{{ $notif->id }}"
+                           data-notification-open="{{ $notif->id }}"
+                           @if(!$isOrganization && Auth::user()?->role !== 'admin') data-mark-read-on-open="1" @endif>
                     @else
-                        <div class="p-4 flex gap-3 hover:bg-slate-50/60 transition group relative {{ $isUnread ? 'bg-blue-50/10' : '' }}"
-                             id="notification-item-{{ $notif->id }}">
+                        <button type="button"
+                                class="{{ $itemClass }} w-full text-left"
+                                id="notification-item-{{ $notif->id }}"
+                                onclick="dismissNotification('{{ $notif->id }}', event)">
                     @endif
                         <div class="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-xs
                                     {{ $isUnread ? 'bg-blue-50 text-jci-blue border border-blue-100' : 'bg-slate-100 text-slate-400' }}">
                             <i class="fa-solid {{ $icon }}"></i>
                         </div>
                         <div class="flex-grow space-y-0.5 pr-4 min-w-0">
-                            <div class="flex justify-between items-start gap-1">
-                                <h5 class="text-xs font-bold text-slate-800 leading-tight truncate">{{ $title }}</h5>
-                                @if ($isUnread && ! $noticeUrl)
-                                    <button onclick="dismissNotification('{{ $notif->id }}', event)"
-                                            class="text-[9px] text-slate-400 hover:text-jci-blue font-bold tracking-tight uppercase"
-                                            title="Mark as Read">
-                                        Dismiss
-                                    </button>
-                                @endif
-                            </div>
-                            <p class="text-[10px] text-slate-500 leading-normal whitespace-pre-line">{{ $message }}</p>
+                            <h5 class="text-xs font-bold text-slate-800 leading-tight truncate dark:text-slate-100">{{ $title }}</h5>
+                            <p class="text-[10px] text-slate-500 leading-normal">{{ $summary }}</p>
                             <span class="text-[8px] text-slate-400 font-medium block pt-1">
-                                {{ $notif->created_at->diffForHumans() }}
+                                {{ \App\Support\ScheduleClock::stamp($notif->created_at) }}
                             </span>
                         </div>
                         @if ($isUnread)
@@ -84,7 +90,7 @@
                     @if($noticeUrl)
                         </a>
                     @else
-                        </div>
+                        </button>
                     @endif
                 @endforeach
             @else
@@ -94,14 +100,34 @@
                 </div>
             @endif
         </div>
-        @if(Auth::user()?->role === 'admin')
-            <a href="{{ route('admin.dashboard', ['tab' => 'notifications']) }}" class="block text-center text-xs font-bold text-jci-blue py-3 border-t border-slate-100 hover:bg-slate-50">
-                Open notifications
-            </a>
-        @elseif(Auth::user()?->role === 'volunteer')
-            <a href="{{ route('volunteer.dashboard', ['section' => 'notifications']) }}" class="block text-center text-xs font-bold text-jci-blue py-3 border-t border-slate-100 hover:bg-slate-50">
-                Open notifications
+        @if($noticeIndex)
+            <a href="{{ $noticeIndex }}" class="block border-t border-slate-100 py-3 text-center text-xs font-bold text-jci-blue hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                View all notifications
             </a>
         @endif
     </div>
 </div>
+
+<script>
+    (function () {
+        document.querySelectorAll('[data-mark-read-on-open]').forEach(function (link) {
+            link.addEventListener('click', function () {
+                const id = link.dataset.notificationOpen;
+                if (!id) {
+                    return;
+                }
+                const token = document.querySelector('meta[name="csrf-token"]')?.content;
+                if (!token) {
+                    return;
+                }
+                fetch('/notifications/' + id + '/read', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': token,
+                        'Accept': 'application/json'
+                    }
+                });
+            });
+        });
+    })();
+</script>

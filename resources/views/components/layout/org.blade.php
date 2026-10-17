@@ -2,8 +2,22 @@
 
 @php
     $orgUser = Auth::user();
-    $orgInitial = strtoupper(substr($orgUser->name, 0, 1));
+    $orgInitials = collect(explode(' ', (string) $orgUser->name))->map(fn ($part) => substr($part, 0, 1))->take(2)->join('');
     $orgUnreadCount = \App\Support\OrgNotifier::unreadCount((int) $orgUser->id);
+    $orgHeader = [
+        'dashboard' => ['Dashboard', 'Events, volunteers, and what needs attention'],
+        'volunteers' => ['Volunteers', 'Applicants, interviews, and approved members'],
+        'officers' => ['Officers', 'Year albums for this organization'],
+        'events' => ['Events', 'Schedules, capacity, and archived events'],
+        'gallery' => ['Gallery', 'Photos from your events'],
+        'tasks' => ['Task Assignment', 'Roles and volunteers on current events'],
+        'messages' => ['Messages', 'VolunteerHub and your volunteers'],
+        'certificates' => ['Certificates', 'Review evidence, then issue certificates'],
+        'notifications' => ['Notifications', $orgUnreadCount > 0 ? $orgUnreadCount.' unread' : 'You are caught up'],
+        'reports' => ['Reports', 'Activity for the selected period'],
+        'settings' => ['Settings', 'Profile, security, notifications, and verification'],
+    ];
+    $orgHeading = $orgHeader[$active] ?? ['Organization', 'Workspace'];
     $nav = [
         ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'fa-table-cells', 'href' => route('org.dashboard')],
         ['key' => 'volunteers', 'label' => 'Volunteers', 'icon' => 'fa-users', 'href' => route('org.dashboard', ['section' => 'volunteers'])],
@@ -22,34 +36,8 @@
 <x-layout.app title="VolunteerHub - Organization Portal">
     <style>
         @media (min-width: 768px) {
-            html.org-collapsed #org-sidebar {
-                width: 0;
-                overflow: visible;
-                border: 0;
-                background: transparent;
-            }
-            html.org-collapsed #org-sidebar > :not(#org-sidebar-foot) { display: none; }
-            html.org-collapsed #org-sidebar-foot {
-                position: fixed;
-                right: 1rem;
-                bottom: 1rem;
-                z-index: 40;
-                width: auto;
-                border: 0;
-                padding: 0;
-                background: transparent;
-            }
-            html.org-collapsed #org-sidebar-foot form { display: none; }
-            html.org-collapsed #org-sidebar-foot .mt-1 { margin: 0; }
-            html.org-collapsed #org-collapse-toggle {
-                border: 1px solid #e2e8f0;
-                background: #fff;
-                box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-            }
-            html.dark.org-collapsed #org-collapse-toggle {
-                border-color: #334155;
-                background: #0f172a;
-            }
+            html.org-collapsed #org-sidebar { display: none; }
+            html.org-collapsed #org-sidebar-show { display: inline-flex; }
             html.org-collapsed #org-page { max-width: none; }
         }
     </style>
@@ -63,9 +51,9 @@
     <div id="org-shell" class="org-shell flex h-screen overflow-hidden bg-[#f5f7fb] text-slate-800 dark:bg-[#0b1120] dark:text-slate-100">
         <div id="org-sidebar-backdrop" class="fixed inset-0 z-40 bg-slate-900/40 hidden md:hidden"></div>
 
-        <aside id="org-sidebar" class="flex h-full w-64 shrink-0 flex-col border-r border-sky-100 bg-[#e8f5fc] dark:border-slate-800 dark:bg-[#0c1222] max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:-translate-x-full">
+        <aside id="org-sidebar" class="flex h-full w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0c1222] max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:-translate-x-full max-md:transition-transform max-md:duration-200">
             <div class="flex items-center gap-3 px-5 py-5">
-                <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-jci-blue text-base font-black text-white shadow-sm shadow-sky-500/30">V</span>
+                <x-ui.brand-mark />
                 <div class="min-w-0">
                     <p class="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">VolunteerHub</p>
                     <p class="text-[11px] font-medium text-slate-400">Organization</p>
@@ -80,59 +68,72 @@
                 @foreach($nav as $item)
                     @php $isActive = $active === $item['key']; @endphp
                     <a href="{{ $item['href'] }}"
-                       class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium {{ $isActive ? 'bg-jci-blue text-white shadow-sm shadow-sky-500/20' : 'text-slate-600 dark:text-slate-300' }}">
-                        <i class="fa-solid {{ $item['icon'] }} w-4 text-center text-sm {{ $isActive ? 'text-white' : 'text-slate-400' }}"></i>
+                       class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-[13px] font-semibold transition-all {{ $isActive ? 'bg-jci-blue text-white shadow-md shadow-sky-500/25' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white' }}">
+                        <i class="fa-solid {{ $item['icon'] }} w-4 text-center text-sm"></i>
                         <span class="min-w-0 flex-1 truncate">{{ $item['label'] }}</span>
                         @if($item['key'] === 'notifications' && ($orgUnreadCount ?? 0) > 0)
-                            <span class="rounded-full {{ $isActive ? 'bg-white text-jci-blue' : 'bg-jci-blue text-white' }} px-1.5 py-0.5 text-[10px] font-semibold">{{ $orgUnreadCount }}</span>
+                            <span class="ml-auto rounded-full px-2 py-0.5 text-[10px] font-black {{ $isActive ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-600' }}">{{ $orgUnreadCount > 99 ? '99+' : $orgUnreadCount }}</span>
                         @endif
                     </a>
                 @endforeach
             </nav>
 
-            <div id="org-sidebar-foot" class="border-t border-slate-200 p-3 dark:border-slate-800">
+            <div id="org-sidebar-foot" class="space-y-0.5 border-t border-slate-200 p-3 dark:border-slate-800">
                 <form action="{{ route('logout') }}" method="POST">
                     @csrf
-                    <button type="submit" class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-slate-600 dark:text-slate-300">
-                        <i class="fa-solid fa-arrow-right-from-bracket w-4 text-center text-sm text-slate-400"></i>
+                    <button type="submit" class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
+                        <i class="fa-solid fa-arrow-right-from-bracket w-4 text-center text-sm"></i>
                         Logout
                     </button>
                 </form>
-                <div class="mt-1 flex justify-end">
-                    <button type="button" id="org-collapse-toggle" class="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-jci-blue dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-sky-300" aria-label="Collapse sidebar">
-                        <i id="org-collapse-icon" class="fa-solid fa-compress text-sm"></i>
-                    </button>
-                </div>
+                <button type="button" id="org-collapse-toggle" class="hidden w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white md:flex">
+                    <i class="fa-solid fa-angles-left w-4 text-center text-sm"></i>
+                    Collapse
+                </button>
             </div>
         </aside>
 
-        <div id="org-content" class="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-            <header class="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-[#0c1222]/90 sm:px-6">
-                <div class="flex items-center gap-3">
-                    <button type="button" id="org-sidebar-toggle" class="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 md:hidden" title="Toggle sidebar">
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-br from-[#f7f9fc] via-[#f3f7ff] to-[#e7f2fb] dark:bg-none dark:bg-[#0b1120]">
+            <header class="z-30 flex shrink-0 items-center justify-between gap-4 border-b border-slate-200/80 bg-white/80 px-4 py-3.5 backdrop-blur dark:border-slate-800 dark:bg-[#0c1222]/90 sm:px-6 md:px-8">
+                <div class="flex min-w-0 items-center gap-3">
+                    <button type="button" id="org-sidebar-show" class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300" title="Show sidebar">
                         <i class="fa-solid fa-bars text-sm"></i>
                     </button>
-                    <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Organization</p>
+                    <button type="button" id="org-sidebar-toggle" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 md:hidden" title="Show sidebar">
+                        <i class="fa-solid fa-bars text-sm"></i>
+                    </button>
+                    <div class="min-w-0">
+                        <h3 class="truncate text-base font-extrabold text-slate-900 dark:text-white sm:text-lg">{{ $orgHeading[0] }}</h3>
+                        <p class="truncate text-[11px] font-medium text-slate-400 sm:text-xs">{{ $orgHeading[1] }}</p>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" id="org-theme-toggle" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-jci-blue dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-sky-300" title="Switch to dark mode" aria-label="Switch color theme">
+                <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+                    <button type="button" id="org-theme-toggle" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-jci-blue dark:text-slate-300 dark:hover:bg-slate-800" title="Switch to dark mode" aria-label="Switch color theme">
                         <i id="org-theme-icon" class="fa-solid fa-moon text-sm"></i>
                     </button>
-                    <a href="{{ route('profile.show') }}" class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-slate-200 text-slate-500 transition hover:border-jci-blue hover:text-jci-blue dark:border-slate-600 dark:text-slate-300" title="{{ $orgUser->name }}">
+                    <x-ui.notifications-bell />
+                    <div class="hidden h-8 w-px bg-slate-200 dark:bg-slate-700 sm:block"></div>
+                    <a href="{{ route('profile.show') }}" class="group flex items-center gap-2.5 rounded-xl px-1.5 py-1 transition hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <div class="hidden text-right sm:block">
+                            <p class="text-xs font-bold leading-tight text-slate-800 transition group-hover:text-jci-blue dark:text-slate-100">{{ $orgUser->name }}</p>
+                            <p class="text-[10px] font-medium text-slate-400">Organization</p>
+                        </div>
                         @if($orgUser->profile_photo_path)
-                            <img src="{{ asset('storage/' . $orgUser->profile_photo_path) }}" alt="{{ $orgUser->name }}" class="h-full w-full object-cover">
+                            <img src="{{ asset('storage/'.$orgUser->profile_photo_path) }}" alt="{{ $orgUser->name }}" class="h-9 w-9 shrink-0 rounded-full border border-slate-200 object-cover">
                         @else
-                            <span class="text-xs font-bold text-jci-blue">{{ $orgInitial }}</span>
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jci-blue text-xs font-bold text-white">{{ strtoupper($orgInitials) }}</span>
                         @endif
                     </a>
                 </div>
             </header>
 
+            <div id="org-content" class="min-h-0 flex-1 overflow-y-auto">
             <main class="flex-1">
                 <div id="org-page" class="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8">
                     {{ $slot }}
                 </div>
             </main>
+            </div>
         </div>
     </div>
 
@@ -142,20 +143,10 @@
             const backdrop = document.getElementById('org-sidebar-backdrop');
             const toggle = document.getElementById('org-sidebar-toggle');
             const collapseButton = document.getElementById('org-collapse-toggle');
-            const collapseIcon = document.getElementById('org-collapse-icon');
+            const showButton = document.getElementById('org-sidebar-show');
             const themeButton = document.getElementById('org-theme-toggle');
             const themeIcon = document.getElementById('org-theme-icon');
             const root = document.documentElement;
-
-            function paintCollapse() {
-                const collapsed = root.classList.contains('org-collapsed');
-                if (collapseIcon) {
-                    collapseIcon.className = collapsed ? 'fa-solid fa-expand text-sm' : 'fa-solid fa-compress text-sm';
-                }
-                if (collapseButton) {
-                    collapseButton.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-                }
-            }
 
             function paintTheme() {
                 const dark = root.classList.contains('dark');
@@ -180,7 +171,6 @@
             }
 
             paintTheme();
-            paintCollapse();
 
             themeButton.addEventListener('click', function () {
                 const dark = root.classList.toggle('dark');
@@ -198,12 +188,18 @@
             });
 
             collapseButton.addEventListener('click', function () {
-                const collapsed = root.classList.toggle('org-collapsed');
-                localStorage.setItem('orgSidebarCollapsed', collapsed ? '1' : '0');
-                paintCollapse();
+                root.classList.add('org-collapsed');
+                localStorage.setItem('orgSidebarCollapsed', '1');
+            });
+            showButton.addEventListener('click', function () {
+                root.classList.remove('org-collapsed');
+                localStorage.setItem('orgSidebarCollapsed', '0');
             });
 
             backdrop.addEventListener('click', closeMobile);
+            sidebar.querySelectorAll('a').forEach(function (link) {
+                link.addEventListener('click', closeMobile);
+            });
         })();
     </script>
 </x-layout.app>

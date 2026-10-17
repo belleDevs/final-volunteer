@@ -19,6 +19,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'email_verified_at',
         'password',
         'role',
         'organization_id',
@@ -178,7 +179,20 @@ class User extends Authenticatable
 
     public function isMember(): bool
     {
-        return $this->membership_fee_paid_at !== null && $this->membership_attended_at !== null;
+        return $this->role === 'volunteer' && $this->organization_id !== null;
+    }
+
+    public function organizationApplications()
+    {
+        return $this->hasMany(OrganizationApplication::class);
+    }
+
+    public function pendingOrganizationApplication(): ?OrganizationApplication
+    {
+        return $this->organizationApplications()
+            ->whereIn('status', ['pending', 'interview_scheduled'])
+            ->latest()
+            ->first();
     }
 
     public function wantsVolunteerNotice(string $type): bool

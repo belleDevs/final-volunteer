@@ -21,7 +21,11 @@ class VolunteerNoticeMail extends Mailable
         public string $noticeTitle,
         public string $noticeMessage,
         public Collection $events,
-        public Collection $assignments
+        public Collection $assignments,
+        public string $noticeType = 'general',
+        public ?string $acceptUrl = null,
+        public ?string $declineUrl = null,
+        public ?string $portalUrl = null,
     ) {
     }
 

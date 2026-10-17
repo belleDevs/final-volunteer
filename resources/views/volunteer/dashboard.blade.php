@@ -11,8 +11,6 @@
         @include('volunteer.sections.certificates')
     @elseif($section === 'skills')
         @include('volunteer.sections.skills')
-    @elseif($section === 'chatbot')
-        @include('volunteer.sections.chatbot')
     @elseif($section === 'messages')
         @include('volunteer.sections.messages')
     @elseif($section === 'settings')

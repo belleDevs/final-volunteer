@@ -101,23 +101,7 @@
                 @if($activeEvents->count() > 0)
                     @foreach($activeEvents as $event)
                         @php
-                            $eventStatusLabel = match ($event->status) {
-                                'draft' => 'Awaiting approval',
-                                'cancelled' => 'Cancelled',
-                                'completed' => 'Completed',
-                                'published' => $event->start_time->isFuture()
-                                    ? 'Upcoming'
-                                    : ($event->end_time->isFuture() ? 'Ongoing' : 'Published'),
-                                default => ucfirst((string) $event->status),
-                            };
-                            $eventStatusClass = match ($eventStatusLabel) {
-                                'Awaiting approval' => 'bg-amber-500 text-white',
-                                'Completed' => 'bg-slate-500 text-white',
-                                'Cancelled' => 'bg-rose-500 text-white',
-                                'Ongoing' => 'bg-amber-500 text-white',
-                                'Published' => 'bg-sky-600 text-white',
-                                default => 'bg-emerald-500 text-white',
-                            };
+                            $eventStatusLabel = $event->oversightLabel();
                         @endphp
                         <div class="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-sm space-y-4 hover:border-slate-300 transition-all duration-200">
                             <div class="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-4">
@@ -134,9 +118,7 @@
                                     <p class="text-xs text-slate-500 mt-1 line-clamp-2">{{ $event->description }}</p>
                                 </div>
                                 <div class="flex flex-wrap xl:justify-end gap-2 xl:shrink-0">
-                                    <span class="{{ $eventStatusClass }} text-[9px] font-black uppercase px-2 py-1 rounded h-fit">
-                                        {{ $eventStatusLabel }}
-                                    </span>
+                                    <x-ui.status-badge :label="$eventStatusLabel" />
                                     <details class="relative">
                                         <summary class="list-none cursor-pointer border border-slate-200 bg-white text-slate-600 hover:text-jci-blue hover:border-jci-blue text-[10px] font-black px-2.5 py-1 rounded-lg">
                                             Manage
@@ -154,14 +136,9 @@
                                                 <div class="grid grid-cols-2 gap-2">
                                                     <input name="capacity" type="number" min="1" value="{{ $event->capacity }}" placeholder="Capacity" class="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-jci-blue focus:outline-none">
                                                     <select name="status" class="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-jci-blue focus:outline-none bg-white">
-                                                        @if($event->status === 'draft')
-                                                            <option value="draft" selected>Awaiting admin approval</option>
-                                                            <option value="cancelled">Cancelled</option>
-                                                        @else
-                                                            <option value="published" {{ $event->status === 'published' ? 'selected' : '' }}>Published</option>
-                                                            <option value="completed" {{ $event->status === 'completed' ? 'selected' : '' }}>Completed</option>
-                                                            <option value="cancelled" {{ $event->status === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
-                                                        @endif
+                                                        <option value="published" {{ in_array($event->status, ['published', 'draft'], true) ? 'selected' : '' }}>Published</option>
+                                                        <option value="completed" {{ $event->status === 'completed' ? 'selected' : '' }}>Completed</option>
+                                                        <option value="cancelled" {{ $event->status === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                                                     </select>
                                                 </div>
                                                 <textarea name="description" required rows="3" class="w-full border border-slate-200 rounded-lg p-2 text-xs focus:ring-1 focus:ring-jci-blue focus:outline-none resize-none">{{ $event->description }}</textarea>
@@ -194,19 +171,9 @@
                                                         <span class="bg-slate-100 text-slate-600 text-[8px] font-bold px-1.5 py-0.5 rounded">Low Priority</span>
                                                     @endif
 
-                                                    @if($task->status === 'completed')
-                                                        <span class="bg-emerald-100 text-emerald-700 text-[8px] font-bold px-1.5 py-0.5 rounded">Completed</span>
-                                                    @elseif($task->status === 'cancelled')
-                                                        <span class="bg-rose-100 text-rose-700 text-[8px] font-bold px-1.5 py-0.5 rounded">Cancelled</span>
-                                                    @elseif($task->status === 'in_progress')
-                                                        <span class="bg-amber-100 text-amber-700 text-[8px] font-bold px-1.5 py-0.5 rounded">In Progress</span>
-                                                    @elseif($task->status === 'assigned')
-                                                        <span class="bg-sky-100 text-sky-700 text-[8px] font-bold px-1.5 py-0.5 rounded">Assigned</span>
-                                                    @else
-                                                        <span class="bg-blue-50 text-jci-blue text-[8px] font-bold px-1.5 py-0.5 rounded">Pending</span>
-                                                    @endif
+                                                    <x-ui.status-badge :label="$task->oversightLabel()" />
                                                     @if($task->isOverdue())
-                                                        <span class="bg-rose-100 text-rose-700 text-[8px] font-bold px-1.5 py-0.5 rounded">Overdue</span>
+                                                        <x-ui.status-badge label="Overdue" />
                                                     @endif
                                                 </div>
                                             </div>

@@ -10,12 +10,39 @@ use App\Http\Controllers\VolunteerController;
 Route::get('/', [AuthController::class, 'index'])->name('home');
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+Route::post('/forgot-password', [AuthController::class, 'sendPasswordResetLink'])
+    ->middleware('throttle:5,1')
+    ->name('password.email');
+Route::get('/reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+    ->middleware('throttle:5,1')
+    ->name('password.update');
 Route::get('/register', [AuthController::class, 'showVolunteerRegister'])->name('register');
 Route::get('/register/volunteer', [AuthController::class, 'showVolunteerRegister'])->name('register.volunteer');
-Route::post('/register/volunteer', [AuthController::class, 'registerVolunteer']);
+Route::post('/register/volunteer', [AuthController::class, 'registerVolunteer'])
+    ->middleware('throttle:8,1');
 Route::get('/register/organization', [AuthController::class, 'showOrgRegister'])->name('register.org');
-Route::post('/register/organization', [AuthController::class, 'registerOrg']);
+Route::post('/register/organization', [AuthController::class, 'registerOrg'])
+    ->middleware('throttle:8,1');
+Route::get('/register/verify/{token}', [AuthController::class, 'showRegisterVerify'])
+    ->name('register.verify');
+Route::post('/register/verify/{token}', [AuthController::class, 'verifyRegister'])
+    ->middleware('throttle:10,1')
+    ->name('register.verify.submit');
+Route::post('/register/verify/{token}/resend', [AuthController::class, 'resendRegisterOtp'])
+    ->middleware('throttle:3,1')
+    ->name('register.verify.resend');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+// Email CTAs → login, then the volunteer page (avoids 403 when another role is signed in)
+Route::get('/email/continue', [AuthController::class, 'continueFromEmail'])->name('email.continue');
+
+// Email accept/decline links (HMAC token; no login required)
+Route::get('/volunteer/assignments/{assignment}/email-respond/{decision}', [VolunteerController::class, 'respondToAssignmentFromEmail'])
+    ->middleware(['throttle:20,1'])
+    ->where('decision', 'accept|decline')
+    ->name('volunteer.assignments.email-respond');
 
 // Authenticated Routes
 Route::middleware(['auth'])->group(function () {
@@ -30,6 +57,7 @@ Route::middleware(['auth'])->group(function () {
     // Administrator Group
     Route::prefix('admin')->middleware('role:admin')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+        Route::post('/messages', [AdminController::class, 'sendOrganizationMessage'])->name('admin.messages.store');
         Route::post('/orgs/{id}/approve', [AdminController::class, 'approveOrg'])->name('admin.orgs.approve');
         Route::post('/orgs/{id}/reject', [AdminController::class, 'rejectOrg'])->name('admin.orgs.reject');
         Route::post('/orgs/{id}/documents', [AdminController::class, 'requestOrgDocuments'])->name('admin.orgs.documents');
@@ -44,6 +72,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/audit-logs', [AdminController::class, 'auditLogs'])->name('admin.audit');
         Route::get('/audit-logs/export/{format}', [AdminController::class, 'exportAudit'])->name('admin.audit.export');
         Route::get('/audit-logs/{auditLog}', [AdminController::class, 'auditLog'])->name('admin.audit.show');
+        Route::post('/notifications/read-all', [AdminController::class, 'readAllNotifications'])->name('admin.notifications.read-all');
     });
 
     // Partner Organization Group
@@ -56,11 +85,15 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/notifications/{notification}/dismiss', [OrgController::class, 'dismissOrganizationNotice'])->name('org.notifications.dismiss');
         Route::get('/mail', fn () => redirect()->route('org.dashboard', ['section' => 'notifications']))->name('org.mail');
         Route::post('/mail', [OrgController::class, 'saveMailSettings'])->name('org.mail.save');
+        Route::post('/messages/admin', [OrgController::class, 'replyToAdmin'])->name('org.messages.admin');
         Route::post('/messages/presence', [OrgController::class, 'messagePresence'])->name('org.messages.presence');
         Route::post('/messages/{volunteer}/reply', [OrgController::class, 'replyMessage'])->name('org.messages.reply');
         Route::post('/messages/{volunteer}/takeover', [OrgController::class, 'takeOverMessage'])->name('org.messages.takeover');
+        Route::post('/messages/{volunteer}/release', [OrgController::class, 'releaseToAssistant'])->name('org.messages.release');
         Route::post('/events', [OrgController::class, 'storeEvent'])->name('org.events.store');
         Route::patch('/events/{event}', [OrgController::class, 'updateEvent'])->name('org.events.update');
+        Route::post('/events/{event}/archive', [OrgController::class, 'archiveEvent'])->name('org.events.archive');
+        Route::post('/events/{event}/restore', [OrgController::class, 'restoreEvent'])->name('org.events.restore');
         Route::delete('/events/{event}', [OrgController::class, 'destroyEvent'])->name('org.events.destroy');
         Route::post('/tasks', [OrgController::class, 'storeTask'])->name('org.tasks.store');
         Route::patch('/tasks/{task}', [OrgController::class, 'updateTask'])->name('org.tasks.update');
@@ -69,18 +102,23 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/tasks/{task}/outreach', [OrgController::class, 'sendTaskOutreach'])->name('org.tasks.outreach');
         Route::post('/applications/{application}/approve', [OrgController::class, 'approveApplication'])->name('org.applications.approve');
         Route::post('/applications/{application}/reject', [OrgController::class, 'rejectApplication'])->name('org.applications.reject');
+        Route::post('/memberships/{application}/interview', [OrgController::class, 'scheduleMembershipInterview'])->name('org.memberships.interview');
+        Route::post('/memberships/{application}/approve', [OrgController::class, 'approveMembershipApplication'])->name('org.memberships.approve');
+        Route::post('/memberships/{application}/reject', [OrgController::class, 'rejectMembershipApplication'])->name('org.memberships.reject');
         Route::post('/settings/profile', [OrgController::class, 'updateOrganizationProfile'])->name('org.settings.profile');
         Route::post('/settings/security', [OrgController::class, 'updateOrganizationSecurity'])->name('org.settings.security');
         Route::post('/settings/notifications', [OrgController::class, 'updateOrganizationNotifications'])->name('org.settings.notifications');
         Route::post('/settings/preferences', [OrgController::class, 'updateOrganizationPreferences'])->name('org.settings.preferences');
         Route::delete('/settings/sessions/{sessionId}', [OrgController::class, 'revokeOrganizationSession'])->name('org.settings.sessions.destroy');
         Route::post('/officers/albums', [OrgController::class, 'storeOfficerAlbum'])->name('org.officers.albums.store');
+        Route::delete('/officers/albums/{album}', [OrgController::class, 'destroyOfficerAlbum'])->name('org.officers.albums.destroy');
         Route::post('/officers', [OrgController::class, 'storeOfficer'])->name('org.officers.store');
         Route::delete('/officers/{officer}', [OrgController::class, 'destroyOfficer'])->name('org.officers.destroy');
         Route::post('/gallery', [OrgController::class, 'storeEventPhotos'])->name('org.gallery.store');
         Route::delete('/gallery/{photo}', [OrgController::class, 'destroyEventPhoto'])->name('org.gallery.destroy');
         Route::post('/documents', [OrgController::class, 'uploadDocument'])->name('org.documents.store');
         Route::get('/documents/{document}/download', [OrgController::class, 'downloadDocument'])->name('org.documents.download');
+        Route::delete('/documents/{document}', [OrgController::class, 'destroyDocument'])->name('org.documents.destroy');
         Route::get('/assignments/{assignment}/proof', [OrgController::class, 'downloadCompletionProof'])->name('org.assignments.proof');
         Route::post('/assignments/{assignment}/approve', [OrgController::class, 'approveCompletion'])->name('org.assignments.approve');
         Route::post('/assignments/{assignment}/reject', [OrgController::class, 'rejectCompletion'])->name('org.assignments.reject');

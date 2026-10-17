@@ -22,6 +22,7 @@ use App\Support\VolunteerAssistant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -37,19 +38,20 @@ class VolunteerController extends Controller
         $volunteer->load('primaryOrganization');
         $mySkills = $volunteer->skills;
 
-        // Get all available skills for registration dropdown
+        // Catalog is limited to the 5 skills that match organization event roles.
         $mySkillIds = $mySkills->pluck('id')->toArray();
-        $availableSkills = Skill::whereNotIn('id', $mySkillIds)->get();
+        $availableSkills = Skill::whereIn('name', \App\Support\RoleCatalog::skillNames())
+            ->whereNotIn('id', $mySkillIds)
+            ->orderBy('name')
+            ->get();
 
-        // Get volunteer's task assignments (tasks they are assigned to)
+        // Live assignments only — soft-deleted events/tasks stay out of the volunteer boards.
         $assignments = Assignment::where('user_id', $volunteer->id)
-            ->with([
-                'event' => fn ($query) => $query->withTrashed()->with('organization'),
-                'task' => fn ($query) => $query->withTrashed()->with('skills'),
-            ])
+            ->with(['event.organization', 'task.skills'])
             ->latest()
             ->get()
             ->filter(fn (Assignment $assignment) => $assignment->task && $assignment->event)
+            ->unique(fn (Assignment $assignment) => $assignment->task_id.'-'.$assignment->event_id)
             ->values();
         $activeAssignments = $assignments->whereIn('status', ['pending', 'approved', 'submitted', 'rejected']);
         $completedAssignments = $assignments->where('status', 'completed');
@@ -74,7 +76,10 @@ class VolunteerController extends Controller
 
         $now = Carbon::now();
         $section = (string) request()->query('section', 'dashboard');
-        $sections = ['dashboard', 'events', 'tasks', 'availability', 'notifications', 'certificates', 'skills', 'chatbot', 'messages', 'settings'];
+        $sections = ['dashboard', 'events', 'tasks', 'availability', 'notifications', 'certificates', 'skills', 'messages', 'settings'];
+        if ($section === 'chatbot') {
+            return redirect()->route('volunteer.dashboard', ['section' => 'messages']);
+        }
         if (!in_array($section, $sections, true)) {
             $section = 'dashboard';
         }
@@ -130,22 +135,38 @@ class VolunteerController extends Controller
 
                 $phase = ScheduleClock::phase($event->start_time, $event->end_time, $event->status);
                 $event->schedule_phase = $phase;
-                $event->duty_titles = $group
-                    ->map(fn (Assignment $assignment) => $assignment->task->title ?? null)
-                    ->filter()
-                    ->unique()
+                $event->duty_details = $group
+                    ->filter(fn (Assignment $assignment) => $assignment->task)
+                    ->map(function (Assignment $assignment) {
+                        $statusLabel = \App\Support\VolunteerDuty::label(
+                            $assignment->status,
+                            $assignment->schedule_phase,
+                            $assignment->feedback
+                        );
+
+                        return [
+                            'title' => $assignment->task->title,
+                            'status' => $statusLabel,
+                            'description' => (string) ($assignment->task->description ?? ''),
+                            'due' => $assignment->task->due_date
+                                ? ScheduleClock::format($assignment->task->due_date)
+                                : '',
+                            'hours' => $assignment->status === 'completed'
+                                ? number_format((float) $assignment->hours_logged, 1)
+                                : '',
+                        ];
+                    })
                     ->values();
-                $event->participation = $group
-                    ->map(fn (Assignment $assignment) => \App\Support\VolunteerDuty::label(
-                        $assignment->status,
-                        $assignment->schedule_phase,
-                        $assignment->feedback
-                    ))
-                    ->unique()
-                    ->join(', ');
-                $event->event_bucket = $event->status === 'cancelled'
-                    ? 'cancelled'
-                    : ($phase === 'now' ? 'ongoing' : ($phase === 'upcoming' ? 'upcoming' : 'completed'));
+                $event->duty_titles = collect($event->duty_details)->pluck('title')->unique()->values();
+                $event->participation = collect($event->duty_details)->pluck('status')->unique()->join(', ');
+                $event->event_bucket = match (true) {
+                    $event->status === 'cancelled' => 'cancelled',
+                    $event->status === 'completed' => 'completed',
+                    $phase === 'upcoming' => 'upcoming',
+                    $phase === 'past' => 'ended',
+                    default => 'ongoing',
+                };
+                $event->status_label = $event->oversightLabel();
 
                 return $event;
             })
@@ -196,7 +217,7 @@ class VolunteerController extends Controller
             ? collect([(int) $volunteer->organization_id])
             : $assignments->map(fn (Assignment $assignment) => (int) $assignment->event->organization_id)->filter()->unique()->values();
 
-        $threads = in_array($section, ['messages', 'chatbot'], true)
+        $threads = $section === 'messages'
             ? ChatbotResponse::where('user_id', $volunteer->id)
                 ->when($organizationIds->isNotEmpty(), fn ($query) => $query->whereIn('organization_id', $organizationIds))
                 ->latest()
@@ -268,16 +289,29 @@ class VolunteerController extends Controller
                         $neededSkillWeights[$skill->id] = [
                             'skill' => $skill,
                             'count' => 0,
-                            'event_title' => $task->event->title
+                            'events' => [],
                         ];
                     }
                     $neededSkillWeights[$skill->id]['count']++;
+                    $neededSkillWeights[$skill->id]['events'][$task->event->id] = $task->event->title;
                 }
             }
         }
 
-        uasort($neededSkillWeights, fn($a, $b) => $b['count'] <=> $a['count']);
-        $recommendedSkills = array_slice($neededSkillWeights, 0, 3);
+        uasort($neededSkillWeights, fn ($a, $b) => $b['count'] <=> $a['count']);
+        $recommendedSkills = collect(array_values($neededSkillWeights))
+            ->take(6)
+            ->map(function (array $item) {
+                $events = array_values($item['events']);
+
+                return [
+                    'skill' => $item['skill'],
+                    'count' => $item['count'],
+                    'event_title' => $events[0] ?? 'Upcoming event',
+                    'events' => $events,
+                ];
+            })
+            ->all();
 
         $pendingResponses = $openDuties
             ->filter(fn (Assignment $assignment) => $assignment->status === 'pending' && $assignment->schedule_phase !== 'past')
@@ -564,12 +598,60 @@ class VolunteerController extends Controller
 
         $assignment = Assignment::where('user_id', Auth::id())
             ->where('id', $id)
-            ->with([
-                'event' => fn ($query) => $query->withTrashed()->with('organization'),
-                'task' => fn ($query) => $query->withTrashed(),
-            ])
+            ->with(['event.organization', 'task'])
             ->firstOrFail();
 
+        return $this->applyAssignmentDecision(
+            $assignment,
+            Auth::user(),
+            $request->decision,
+            trim((string) $request->input('reason'))
+        );
+    }
+
+    /**
+     * Accept or decline from an email link (HMAC token; no login required).
+     */
+    public function respondToAssignmentFromEmail(Request $request, Assignment $assignment, string $decision)
+    {
+        abort_unless(in_array($decision, ['accept', 'decline'], true), 404);
+
+        $userId = (int) $request->query('user');
+        $expires = (int) $request->query('expires');
+        $token = (string) $request->query('token');
+
+        if ($userId <= 0 || $expires <= 0 || $token === ''
+            || !\App\Support\VolunteerNotice::assignmentActionTokenIsValid((int) $assignment->id, $userId, $decision, $expires, $token)) {
+            return redirect()->route('login')
+                ->with('error', 'This email link is invalid or has expired. Sign in to respond from your Tasks board.');
+        }
+
+        if ((int) $assignment->user_id !== $userId) {
+            return redirect()->route('login')
+                ->with('error', 'This task was reassigned to someone else, so that email link no longer works.');
+        }
+
+        $assignment->loadMissing(['event.organization', 'task']);
+        $volunteer = User::where('id', $userId)
+            ->where('role', 'volunteer')
+            ->firstOrFail();
+
+        if (!Auth::check() || (int) Auth::id() !== (int) $volunteer->id) {
+            Auth::login($volunteer);
+        }
+
+        return $this->applyAssignmentDecision($assignment, $volunteer, $decision);
+    }
+
+    /**
+     * Shared accept/decline handling for dashboard forms and email links.
+     */
+    private function applyAssignmentDecision(
+        Assignment $assignment,
+        User $volunteer,
+        string $decision,
+        string $reason = ''
+    ) {
         if (!$assignment->task || !$assignment->event) {
             return redirect()->route('volunteer.dashboard', ['section' => 'tasks'])
                 ->with('error', 'This assignment is no longer available.');
@@ -585,12 +667,11 @@ class VolunteerController extends Controller
                 ->with('error', 'This event has already passed, so it can no longer be accepted or declined.');
         }
 
-        $volunteer = Auth::user();
         $organizationId = (int) $assignment->event->organization_id;
         $taskTitle = $assignment->task->title;
         $eventTitle = $assignment->event->title ?? 'Event';
 
-        if ($request->decision === 'accept') {
+        if ($decision === 'accept') {
             $assignment->status = 'approved';
             $assignment->responded_at = now();
             $assignment->save();
@@ -635,7 +716,6 @@ class VolunteerController extends Controller
                 ->with('success', 'You accepted "'.$taskTitle.'".');
         }
 
-        $reason = trim((string) $request->input('reason'));
         $assignment->status = 'cancelled';
         $assignment->feedback = $reason === ''
             ? 'Declined by the volunteer.'
@@ -883,35 +963,87 @@ class VolunteerController extends Controller
             )
             : null;
 
-        $orgOnline = $organization && Cache::has('org-online-'.$organization->id);
-        $withAgent = $conversation?->withAgent() || $orgOnline;
-        $answer = $withAgent ? null : app(VolunteerAssistant::class)->answer($volunteer, $message, $organization);
-        $needsTakeover = $answer === null;
-        $response = $answer['response'] ?? VolunteerAssistant::HANDOFF;
+        $assistant = app(VolunteerAssistant::class);
+        $withAgent = (bool) $conversation?->withAgent();
+
+        // Volunteer can reclaim the AI even while the organization thread is active.
+        if ($withAgent && $assistant->messageRequestsAssistant($message)) {
+            $answer = $assistant->answerRequestAssistant($organization);
+            $conversation?->forceFill([
+                'mode' => 'assistant',
+                'needs_takeover' => false,
+                'last_message_at' => now(),
+            ])->save();
+
+            $chatLog = ChatbotResponse::create([
+                'user_id' => $volunteer->id,
+                'organization_id' => $organization?->id,
+                'message' => $message,
+                'response' => $answer['response'],
+                'intent' => 'request_assistant',
+                'confidence' => 1,
+                'needs_takeover' => false,
+                'answered_by' => 'assistant',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => $chatLog->message,
+                'response' => $chatLog->response,
+                'show_assistant' => true,
+                'with_agent' => false,
+                'organization' => $organization?->name,
+                'intent' => $chatLog->intent,
+                'time' => $chatLog->created_at->format('g:i A'),
+            ]);
+        }
+
+        $answer = $withAgent ? null : $assistant->answer($volunteer, $message, $organization);
+        $requestedAgent = ! $withAgent && (($answer['intent'] ?? null) === 'request_agent');
+        $needsTakeover = $answer === null || $requestedAgent;
+
+        if ($withAgent) {
+            $response = 'Message sent to '.($organization->name ?? 'your organization')
+                .'. They\'ll reply in this same Messages chat. Say “talk to the assistant” anytime to bring the AI back.';
+        } elseif ($answer === null) {
+            $response = VolunteerAssistant::handoffMessage($organization);
+        } else {
+            $response = $answer['response'];
+        }
 
         $chatLog = ChatbotResponse::create([
             'user_id' => $volunteer->id,
             'organization_id' => $organization?->id,
             'message' => $message,
-            'response' => $withAgent ? '' : $response,
+            'response' => $response,
             'intent' => $answer['intent'] ?? ($withAgent ? 'agent' : 'handoff'),
             'confidence' => $answer['confidence'] ?? 0,
-            'needs_takeover' => $needsTakeover && !$withAgent,
-            'answered_by' => $answer ? 'assistant' : 'pending',
+            'needs_takeover' => $needsTakeover,
+            'answered_by' => ($withAgent || $answer === null) ? 'pending' : 'assistant',
         ]);
 
-        if ($conversation) {
-            $conversation->forceFill([
-                'needs_takeover' => $conversation->needs_takeover || ($needsTakeover && !$withAgent),
+        if ($conversation && $organization) {
+            $updates = [
+                'needs_takeover' => $conversation->needs_takeover || $needsTakeover,
                 'last_message_at' => $chatLog->created_at,
-            ])->save();
+            ];
 
-            if ($needsTakeover && !$withAgent) {
+            // Volunteer asked to talk to a person → switch this thread to organization replies.
+            if ($requestedAgent) {
+                $updates['mode'] = 'agent';
+                $updates['needs_takeover'] = true;
+            }
+
+            $conversation->forceFill($updates)->save();
+
+            if ($needsTakeover) {
                 PortalNotifier::send(
                     (int) $organization->id,
-                    'A volunteer needs a reply',
-                    $volunteer->name.' asked something the assistant could not answer.',
-                    $volunteer->name.' asked: "'.$message.'". Take over the conversation to reply.',
+                    $requestedAgent ? 'Volunteer wants to talk to you' : 'A volunteer needs a reply',
+                    $requestedAgent
+                        ? $volunteer->name.' asked to speak with the organization.'
+                        : $volunteer->name.' asked something the assistant could not answer.',
+                    $volunteer->name.' wrote: "'.$message.'". Open Messages to reply in the same conversation.',
                     'fa-comment',
                     route('org.dashboard', ['section' => 'messages', 'volunteer' => $volunteer->id])
                 );
@@ -922,8 +1054,8 @@ class VolunteerController extends Controller
             'success' => true,
             'message' => $chatLog->message,
             'response' => $chatLog->response,
-            'show_assistant' => $chatLog->answered_by === 'assistant' || $chatLog->needs_takeover,
-            'with_agent' => (bool) $withAgent,
+            'show_assistant' => filled($chatLog->response),
+            'with_agent' => (bool) ($conversation?->fresh()?->withAgent() ?? $withAgent),
             'organization' => $organization?->name,
             'intent' => $chatLog->intent,
             'time' => $chatLog->created_at->format('g:i A'),
@@ -1088,11 +1220,15 @@ class VolunteerController extends Controller
         }
 
         if ($section === 'deactivate') {
-            $request->validate(['confirm' => ['required', 'accepted']]);
+            $request->validate([
+                'current_password' => ['required', 'current_password'],
+                'confirm' => ['required', 'accepted'],
+            ]);
+
             $preferences = $volunteer->notification_preferences ?? [];
-            if (!empty($preferences['deactivation_requested_at'])) {
+            if (! empty($preferences['deactivation_requested_at'])) {
                 return redirect()->route('volunteer.dashboard', ['section' => 'settings'])
-                    ->with('error', 'A deactivation request is already on file. The organization has to handle it.');
+                    ->with('error', 'A deactivation request is already on file.');
             }
 
             $preferences['deactivation_requested_at'] = now()->toIso8601String();
@@ -1114,8 +1250,80 @@ class VolunteerController extends Controller
                 );
             }
 
+            AuditTrail::record([
+                'action' => 'Deactivation requested',
+                'action_type' => 'updated',
+                'module' => 'Accounts',
+                'description' => $volunteer->name.' requested account deactivation.',
+                'subject' => $volunteer,
+                'subject_label' => $volunteer->name,
+            ]);
+
             return redirect()->route('volunteer.dashboard', ['section' => 'settings'])
                 ->with('success', 'Deactivation request sent. Your account stays active until it is reviewed.');
+        }
+
+        if ($section === 'cancel_deactivate') {
+            $preferences = $volunteer->notification_preferences ?? [];
+            unset($preferences['deactivation_requested_at']);
+            $volunteer->notification_preferences = $preferences;
+            $volunteer->save();
+
+            return redirect()->route('volunteer.dashboard', ['section' => 'settings'])
+                ->with('success', 'Deactivation request cancelled.');
+        }
+
+        if ($section === 'delete') {
+            $request->validate([
+                'current_password' => ['required', 'current_password'],
+                'confirm' => ['required', 'accepted'],
+                'confirm_text' => ['required', 'string'],
+            ]);
+
+            if (mb_strtoupper(trim((string) $request->input('confirm_text'))) !== 'DELETE') {
+                return redirect()->route('volunteer.dashboard', ['section' => 'settings'])
+                    ->with('error', 'Type DELETE exactly to permanently remove your account.');
+            }
+
+            $name = $volunteer->name;
+            $email = $volunteer->email;
+            $organizationId = (int) ($this->volunteerOrganization($volunteer)?->id ?? 0);
+
+            AuditTrail::record([
+                'action' => 'Volunteer account deleted',
+                'action_type' => 'deleted',
+                'module' => 'Accounts',
+                'description' => $name.' ('.$email.') deleted their volunteer account.',
+                'subject_label' => $name,
+                'previous' => ['user_id' => $volunteer->id, 'email' => $email],
+            ]);
+
+            if ($organizationId > 0) {
+                OrgNotifier::send(
+                    $organizationId,
+                    'account',
+                    'Volunteer account deleted',
+                    $name.' permanently deleted their volunteer account.',
+                    $name,
+                    route('org.dashboard', ['section' => 'volunteers']),
+                    'View volunteers',
+                    false,
+                    'account-deleted-'.$volunteer->id
+                );
+            }
+
+            if ($volunteer->profile_photo_path) {
+                Storage::disk('public')->delete($volunteer->profile_photo_path);
+            }
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            $volunteer->delete();
+
+            return redirect()->route('login')
+                ->with('status', 'Your volunteer account has been permanently deleted.');
         }
 
         abort(404);

@@ -221,7 +221,7 @@ class ActivityReport
         }
 
         $organizationOptions = $audience === 'admin'
-            ? User::where('role', 'organization')->orderBy('name')->get(['id', 'name'])->map(fn (User $organization) => [
+            ? User::where('role', 'organization')->where('status', 'approved')->orderBy('name')->get(['id', 'name'])->map(fn (User $organization) => [
                 'id' => $organization->id,
                 'label' => $organization->name,
             ])->all()
@@ -310,9 +310,9 @@ class ActivityReport
         $skillRows = self::skillRows($tasks);
 
         $eventStatus = [
-            ['key' => 'review', 'label' => 'Needs review', 'value' => $events->filter(fn (Event $event) => $event->oversightStatus() === 'review')->count(), 'color' => '#f59e0b'],
             ['key' => 'upcoming', 'label' => 'Upcoming', 'value' => $events->filter(fn (Event $event) => $event->oversightStatus() === 'upcoming')->count(), 'color' => '#0097d6'],
-            ['key' => 'ongoing', 'label' => 'Ongoing', 'value' => $events->filter(fn (Event $event) => $event->oversightStatus() === 'ongoing')->count(), 'color' => '#0284c7'],
+            ['key' => 'ongoing', 'label' => 'Ongoing', 'value' => $events->filter(fn (Event $event) => $event->oversightStatus() === 'ongoing')->count(), 'color' => '#0d9488'],
+            ['key' => 'ended', 'label' => 'Ended', 'value' => $events->filter(fn (Event $event) => $event->oversightStatus() === 'ended')->count(), 'color' => '#64748b'],
             ['key' => 'completed', 'label' => 'Completed', 'value' => $events->where('status', 'completed')->count(), 'color' => '#059669'],
             ['key' => 'cancelled', 'label' => 'Cancelled', 'value' => $events->where('status', 'cancelled')->count(), 'color' => '#e11d48'],
         ];
@@ -541,10 +541,10 @@ class ActivityReport
         return match ($category) {
             'events' => [
                 'all' => 'All statuses',
-                'review' => 'Needs review',
-                'approved' => 'Approved',
+                'approved' => 'Published',
                 'upcoming' => 'Upcoming',
                 'ongoing' => 'Ongoing',
+                'ended' => 'Ended',
                 'completed' => 'Completed',
                 'cancelled' => 'Cancelled',
             ],
@@ -637,7 +637,6 @@ class ActivityReport
         ?User $user = null
     ): array {
         $completedEvents = $events->where('status', 'completed')->count();
-        $pendingEvents = $events->where('status', 'draft')->count();
         $overdue = $tasks->filter(fn (Task $task) => $task->isOverdue())->count();
         $hours = self::recordedHours($events, $hoursUserId);
 
@@ -704,10 +703,10 @@ class ActivityReport
                 self::card('events', 'Events created', $events->count(), 'Records in this period', 'events'),
                 self::card('upcoming', 'Upcoming', $events->filter(fn (Event $event) => $event->oversightStatus() === 'upcoming')->count(), 'Published, start date still ahead', 'upcoming'),
                 self::card('ongoing', 'Ongoing', $events->filter(fn (Event $event) => $event->oversightStatus() === 'ongoing')->count(), 'Published and already started', 'ongoing'),
+                self::card('ended', 'Ended', $events->filter(fn (Event $event) => $event->oversightStatus() === 'ended')->count(), 'Schedule has passed and the organization has not archived it', 'ended'),
                 self::card('completed-events', 'Completed', $completedEvents, 'Status is completed', 'completed-events'),
                 self::card('cancelled', 'Cancelled', $events->where('status', 'cancelled')->count(), 'Status is cancelled', 'cancelled'),
-                self::card('pending-events', 'Pending approval', $pendingEvents, 'Status is draft', 'pending-events'),
-                self::card('approved', 'Approved', $events->where('status', 'published')->count(), 'Status is published', 'approved'),
+                self::card('approved', 'Published', $events->where('status', 'published')->count(), 'Visible to the organization\'s volunteers', 'approved'),
             ];
         }
 
@@ -749,7 +748,6 @@ class ActivityReport
             self::card('tasks', 'Tasks', $tasksTotal, 'Tasks on those events', 'tasks'),
             self::card('completed-events', 'Completed events', $completedEvents, 'Status is completed', 'completed-events'),
             self::card('completed-tasks', 'Completed tasks', $tasksCompleted, 'Status is completed', 'completed-tasks'),
-            self::card('pending-events', 'Pending event approvals', $pendingEvents, 'Status is draft', 'pending-events'),
             self::card('overdue', 'Overdue tasks', $overdue, 'Open tasks past their deadline', 'overdue'),
         ];
     }
@@ -909,6 +907,7 @@ class ActivityReport
             'events' => $eventSection($events, 'All events in this report'),
             'upcoming' => $eventSection($events->filter(fn (Event $event) => $event->oversightStatus() === 'upcoming'), 'Upcoming events'),
             'ongoing' => $eventSection($events->filter(fn (Event $event) => $event->oversightStatus() === 'ongoing'), 'Ongoing events'),
+            'ended' => $eventSection($events->filter(fn (Event $event) => $event->oversightStatus() === 'ended'), 'Ended events'),
             'completed-events' => $eventSection($events->where('status', 'completed'), 'Completed events'),
             'cancelled' => $eventSection($events->where('status', 'cancelled'), 'Cancelled events'),
             'pending-events' => $eventSection($events->where('status', 'draft'), 'Events waiting for approval'),

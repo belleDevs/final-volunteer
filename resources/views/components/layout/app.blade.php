@@ -21,9 +21,9 @@
     <!-- Assets via Vite -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col custom-scrollbar dark:bg-slate-950 dark:text-slate-100">
+<body class="bg-slate-50 font-sans text-slate-800 antialiased min-h-screen flex flex-col overflow-x-hidden custom-scrollbar dark:bg-slate-950 dark:text-slate-100">
 
-    <div id="toast-container" class="fixed top-6 right-4 z-[9999] flex flex-col gap-2 max-w-sm w-full"></div>
+    <div id="toast-container" class="fixed top-4 inset-x-3 sm:inset-x-auto sm:right-4 sm:left-auto z-[9999] flex flex-col gap-2 max-w-sm w-auto sm:w-full pointer-events-none [&>*]:pointer-events-auto"></div>
 
     <!-- ROOT CONTAINER FOR VIEWS -->
     <div id="app-root" class="flex-grow flex flex-col">
@@ -34,7 +34,7 @@
     <script>
         function triggerToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
-            if (!container) return;
+            if (!container || !message) return;
             
             const colors = {
                 success: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20',
@@ -51,14 +51,22 @@
             if (type === 'error') icon = 'fa-circle-xmark';
             if (type === 'warning') icon = 'fa-triangle-exclamation';
 
-            toast.innerHTML = `
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid ${icon}"></i>
-                    <span>${message}</span>
-                </div>
-                <button onclick="this.parentElement.remove()" class="opacity-75 hover:opacity-100"><i class="fa-solid fa-xmark"></i></button>
-            `;
-            
+            const body = document.createElement('div');
+            body.className = 'flex items-center gap-2 min-w-0';
+            body.innerHTML = `<i class="fa-solid ${icon} shrink-0"></i>`;
+            const text = document.createElement('span');
+            text.className = 'break-words';
+            text.textContent = String(message);
+            body.appendChild(text);
+
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'opacity-75 hover:opacity-100 shrink-0';
+            close.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            close.addEventListener('click', function () { toast.remove(); });
+
+            toast.appendChild(body);
+            toast.appendChild(close);
             container.appendChild(toast);
             
             // Animate in
@@ -73,18 +81,26 @@
             }, 4000);
         }
 
-        // Connect Laravel Session Flash Messages to Toasts
+        // Connect Laravel Session Flash Messages to Toasts (all portals)
         document.addEventListener('DOMContentLoaded', () => {
             @if (session('success'))
-                triggerToast("{{ session('success') }}", 'success');
+                triggerToast(@json(session('success')), 'success');
             @endif
 
             @if (session('error'))
-                triggerToast("{{ session('error') }}", 'error');
+                triggerToast(@json(session('error')), 'error');
             @endif
 
-            @if ($errors->any())
-                triggerToast("{{ $errors->first() }}", 'error');
+            @if (session('status'))
+                triggerToast(@json(session('status')), 'info');
+            @endif
+
+            @if (session('warning'))
+                triggerToast(@json(session('warning')), 'warning');
+            @endif
+
+            @if ($errors->default->any())
+                triggerToast(@json($errors->default->first()), 'error');
             @endif
 
             // Global Logout Confirmation Modal

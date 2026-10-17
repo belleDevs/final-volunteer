@@ -9,6 +9,7 @@ use App\Models\Assignment;
 use App\Models\Certificate;
 use App\Models\ChatbotRule;
 use App\Models\ChatbotResponse;
+use App\Models\PlatformMessage;
 use App\Models\RecordArchive;
 use App\Models\AuditLog;
 use App\Support\ActivityReport;
@@ -51,9 +52,10 @@ class AdminController extends Controller
             ->count();
 
         $pendingOrgs = User::where('role', 'organization')->where('status', 'pending')->get();
+        $rejectedOrgCount = User::where('role', 'organization')->where('status', 'rejected')->count();
         $pendingCompletionReviews = Assignment::where('status', 'submitted')->count();
         $issuedCertificates = Certificate::count();
-        $chatbotMessageCount = ChatbotResponse::count();
+        $organizationMessageCount = PlatformMessage::count();
         $broadcastLogCount = RecordArchive::where('table_name', 'broadcasts')->count();
 
         $monthStart = $now->copy()->startOfMonth();
@@ -111,8 +113,8 @@ class AdminController extends Controller
             ->take(30)
             ->get();
         $organizations = User::where('role', 'organization')
+            ->where('status', 'approved')
             ->withCount('events')
-            ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
             ->orderBy('name')
             ->get();
         $organizationIds = $organizations->pluck('id');
@@ -153,8 +155,8 @@ class AdminController extends Controller
             'organization:id,name,organization_type',
             'tasks.applications:id,task_id,user_id,status',
             'tasks.assignments' => function ($query) {
-                $query->select('id', 'task_id', 'event_id', 'user_id', 'status')
-                    ->whereIn('status', ['approved', 'submitted', 'completed'])
+                $query->select('id', 'task_id', 'event_id', 'user_id', 'status', 'hours_logged')
+                    ->whereIn('status', ['pending', 'approved', 'submitted', 'completed', 'rejected'])
                     ->with('user:id,name');
             },
         ])->orderByDesc('start_time')->get();
@@ -174,7 +176,7 @@ class AdminController extends Controller
         ])->orderByRaw('due_date is null, due_date')->get();
 
         $selectedTaskOrg = (int) $request->query('task_org', 0);
-        $eventStatusFilter = in_array($request->query('event_status'), ['review', 'upcoming', 'ongoing', 'completed', 'cancelled'], true)
+        $eventStatusFilter = in_array($request->query('event_status'), ['review', 'upcoming', 'ongoing', 'ended', 'completed', 'cancelled'], true)
             ? $request->query('event_status')
             : 'all';
         $taskStatusFilter = in_array($request->query('task_status'), ['pending', 'assigned', 'in_progress', 'completed', 'overdue'], true)
@@ -183,9 +185,9 @@ class AdminController extends Controller
         $taskEventFilter = (int) $request->query('task_event', 0);
 
         $dashboardEventStatus = [
-            ['key' => 'review', 'label' => 'Needs review', 'value' => $postedEvents->filter(fn (Event $event) => $event->oversightStatus() === 'review')->count(), 'color' => '#f59e0b'],
             ['key' => 'upcoming', 'label' => 'Upcoming', 'value' => $postedEvents->filter(fn (Event $event) => $event->oversightStatus() === 'upcoming')->count(), 'color' => '#0097d6'],
-            ['key' => 'ongoing', 'label' => 'Ongoing', 'value' => $postedEvents->filter(fn (Event $event) => $event->oversightStatus() === 'ongoing')->count(), 'color' => '#0284c7'],
+            ['key' => 'ongoing', 'label' => 'Ongoing', 'value' => $postedEvents->filter(fn (Event $event) => $event->oversightStatus() === 'ongoing')->count(), 'color' => '#0d9488'],
+            ['key' => 'ended', 'label' => 'Ended', 'value' => $postedEvents->filter(fn (Event $event) => $event->oversightStatus() === 'ended')->count(), 'color' => '#64748b'],
             ['key' => 'completed', 'label' => 'Completed', 'value' => $postedEvents->where('status', 'completed')->count(), 'color' => '#059669'],
             ['key' => 'cancelled', 'label' => 'Cancelled', 'value' => $postedEvents->where('status', 'cancelled')->count(), 'color' => '#e11d48'],
         ];
@@ -256,10 +258,13 @@ class AdminController extends Controller
                 ]);
         }
 
-        $adminNotices = Auth::user()
-            ->notifications()
-            ->latest()
-            ->limit(40)
+        $noticeFilter = $request->query('filter') === 'unread' ? 'unread' : 'all';
+        $adminNoticesQuery = Auth::user()->notifications()->latest();
+        if ($noticeFilter === 'unread') {
+            $adminNoticesQuery->whereNull('read_at');
+        }
+        $adminNotices = $adminNoticesQuery
+            ->limit(50)
             ->get()
             ->map(function ($notice) {
                 $data = is_array($notice->data) ? $notice->data : json_decode($notice->data, true);
@@ -268,16 +273,82 @@ class AdminController extends Controller
                 return [
                     'id' => $notice->id,
                     'title' => $data['title'] ?? 'Notice',
-                    'summary' => $data['summary'] ?? \Illuminate\Support\Str::limit($message, 90),
+                    'summary' => $data['summary'] ?? \Illuminate\Support\Str::limit($message, 110),
                     'message' => $message,
                     'icon' => $data['icon'] ?? 'fa-bell',
                     'url' => $data['url'] ?? null,
+                    'action' => $data['action'] ?? null,
                     'read' => $notice->read_at !== null,
                     'when' => $notice->created_at?->diffForHumans(),
                     'stamp' => $notice->created_at?->format('M d, Y g:i A'),
                 ];
             });
-        $selectedNotice = $adminNotices->firstWhere('id', $selectedNoticeId);
+        $selectedNotice = $adminNotices->firstWhere('id', $selectedNoticeId)
+            ?? ($selectedNoticeId !== ''
+                ? Auth::user()->notifications()->where('id', $selectedNoticeId)->get()->map(function ($notice) {
+                    $data = is_array($notice->data) ? $notice->data : json_decode($notice->data, true);
+                    $message = $data['message'] ?? '';
+
+                    return [
+                        'id' => $notice->id,
+                        'title' => $data['title'] ?? 'Notice',
+                        'summary' => $data['summary'] ?? \Illuminate\Support\Str::limit($message, 110),
+                        'message' => $message,
+                        'icon' => $data['icon'] ?? 'fa-bell',
+                        'url' => $data['url'] ?? null,
+                        'action' => $data['action'] ?? null,
+                        'read' => $notice->read_at !== null,
+                        'when' => $notice->created_at?->diffForHumans(),
+                        'stamp' => $notice->created_at?->format('M d, Y g:i A'),
+                    ];
+                })->first()
+                : null);
+        $adminNoticeUnreadTotal = Auth::user()->unreadNotifications()->count();
+        $adminNoticeTotal = Auth::user()->notifications()->count();
+
+        $messageOrganizations = collect();
+        $selectedMessageOrg = null;
+        $platformMessages = collect();
+        if ($activeTab === 'messages') {
+            $messageOrganizations = User::where('role', 'organization')
+                ->where('status', 'approved')
+                ->orderBy('name')
+                ->get();
+            $organizationIds = $messageOrganizations->pluck('id');
+            $latestMessages = PlatformMessage::whereIn('organization_id', $organizationIds)
+                ->orderByDesc('id')
+                ->get()
+                ->unique('organization_id')
+                ->keyBy('organization_id');
+            $unreadCounts = PlatformMessage::whereIn('organization_id', $organizationIds)
+                ->where('from_admin', false)
+                ->whereNull('read_at')
+                ->selectRaw('organization_id, count(*) as unread')
+                ->groupBy('organization_id')
+                ->pluck('unread', 'organization_id');
+
+            $messageOrganizations = $messageOrganizations->map(function (User $organization) use ($latestMessages, $unreadCounts) {
+                $latest = $latestMessages->get($organization->id);
+                $organization->setAttribute('message_preview', $latest?->body ?: 'No messages yet');
+                $organization->setAttribute('message_at', $latest?->created_at);
+                $organization->setAttribute('message_unread', (int) ($unreadCounts[$organization->id] ?? 0));
+
+                return $organization;
+            })->sortByDesc(fn (User $organization) => $organization->message_at?->timestamp ?? 0)->values();
+
+            $selectedId = (int) $request->query('org');
+            $selectedMessageOrg = $messageOrganizations->firstWhere('id', $selectedId) ?? $messageOrganizations->first();
+            if ($selectedMessageOrg) {
+                PlatformMessage::where('organization_id', $selectedMessageOrg->id)
+                    ->where('from_admin', false)
+                    ->whereNull('read_at')
+                    ->update(['read_at' => now()]);
+                $platformMessages = PlatformMessage::where('organization_id', $selectedMessageOrg->id)
+                    ->orderBy('created_at')
+                    ->get();
+                $selectedMessageOrg->setAttribute('message_unread', 0);
+            }
+        }
 
         return view('admin.dashboard', compact(
             'totalVolunteers',
@@ -285,9 +356,10 @@ class AdminController extends Controller
             'approvedOrgs',
             'openTasks',
             'pendingOrgs',
+            'rejectedOrgCount',
             'pendingCompletionReviews',
             'issuedCertificates',
-            'chatbotMessageCount',
+            'organizationMessageCount',
             'broadcastLogCount',
             'chatbotRules',
             'chatbotLogs',
@@ -310,13 +382,61 @@ class AdminController extends Controller
             'taskEventFilter',
             'adminNotices',
             'selectedNotice',
+            'noticeFilter',
+            'adminNoticeUnreadTotal',
+            'adminNoticeTotal',
             'dashboardEventStatus',
             'dashboardTaskStatus',
             'dashboardMonthLabels',
             'dashboardMonthEvents',
             'dashboardMonthVolunteers',
-            'dashboardOrganizations'
+            'dashboardOrganizations',
+            'messageOrganizations',
+            'selectedMessageOrg',
+            'platformMessages'
         ));
+    }
+
+    public function sendOrganizationMessage(Request $request)
+    {
+        $data = $request->validate([
+            'organization_id' => ['required', 'integer'],
+            'message' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $organization = User::where('role', 'organization')->where('id', $data['organization_id'])->firstOrFail();
+        $body = trim($data['message']);
+
+        PlatformMessage::create([
+            'organization_id' => $organization->id,
+            'sender_id' => Auth::id(),
+            'from_admin' => true,
+            'body' => $body,
+        ]);
+
+        OrgNotifier::send(
+            (int) $organization->id,
+            'account',
+            'Message from VolunteerHub',
+            $body,
+            'VolunteerHub',
+            route('org.dashboard', ['section' => 'messages', 'with' => 'admin']),
+            'Open messages',
+            false,
+            null
+        );
+
+        AuditTrail::record([
+            'action' => 'Admin message sent',
+            'action_type' => 'other',
+            'module' => 'Messages',
+            'description' => Auth::user()->name.' sent a message to '.$organization->name.'.',
+            'subject' => $organization,
+            'subject_label' => $organization->name,
+        ]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'messages', 'org' => $organization->id])
+            ->with('success', 'Message sent to '.$organization->name.'.');
     }
 
     /**
@@ -765,6 +885,14 @@ class AdminController extends Controller
         AuditTrail::report($request, $format);
 
         return $format === 'pdf' ? ReportFiles::pdf($report) : ReportFiles::excel($report);
+    }
+
+    public function readAllNotifications()
+    {
+        Auth::user()->unreadNotifications()->update(['read_at' => now()]);
+
+        return redirect()->route('admin.dashboard', ['tab' => 'notifications'])
+            ->with('success', 'All notifications were marked as read.');
     }
 
     public function auditLogs(Request $request)

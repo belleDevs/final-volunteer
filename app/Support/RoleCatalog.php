@@ -5,7 +5,8 @@ namespace App\Support;
 class RoleCatalog
 {
     /**
-     * Event roles and the volunteer skills that fit each one.
+     * Event roles shown to organizations (9 presets; "Add a role" makes 10 choices in the UI).
+     * Each role maps to one or more of the 5 volunteer skills.
      *
      * @return array<string, list<string>>
      */
@@ -14,18 +15,29 @@ class RoleCatalog
         return [
             'Registration' => ['Public Relations', 'Community Outreach'],
             'Documentation' => ['Public Relations'],
-            'Guest Speaker' => ['Public Relations', 'Event Coordinating'],
             'Emcee' => ['Public Relations', 'Event Coordinating'],
-            'Photography' => ['Public Relations'],
             'Usher' => ['Community Outreach', 'Event Coordinating'],
             'Program Host' => ['Event Coordinating', 'Public Relations'],
             'First Aid' => ['First Aid Responder'],
             'Crowd Control' => ['Disaster Response'],
             'Logistics' => ['Disaster Response', 'Event Coordinating'],
             'Setup and Cleanup' => ['Community Outreach'],
-            'Food Service' => ['Community Outreach'],
-            'Coastal Cleanup' => ['Community Outreach', 'Mangrove Planting'],
-            'Planting' => ['Mangrove Planting', 'Community Outreach'],
+        ];
+    }
+
+    /**
+     * Volunteer skill catalog (5 skills aligned with the org roles above).
+     *
+     * @return list<string>
+     */
+    public static function skillNames(): array
+    {
+        return [
+            'Public Relations',
+            'Community Outreach',
+            'Event Coordinating',
+            'First Aid Responder',
+            'Disaster Response',
         ];
     }
 
@@ -58,7 +70,9 @@ class RoleCatalog
             }
         }
 
-        return array_keys($found);
+        $allowed = array_fill_keys(self::skillNames(), true);
+
+        return array_values(array_filter(array_keys($found), fn (string $skill) => isset($allowed[$skill])));
     }
 
     /**
@@ -87,18 +101,14 @@ class RoleCatalog
             'logistic' => ['Disaster Response', 'Event Coordinating'],
             'disaster' => ['Disaster Response'],
             'safety' => ['Disaster Response', 'First Aid Responder'],
-            'mangrove' => ['Mangrove Planting', 'Community Outreach'],
-            'plant' => ['Mangrove Planting', 'Community Outreach'],
-            'sapling' => ['Mangrove Planting', 'Community Outreach'],
             'cleanup' => ['Community Outreach'],
             'clean-up' => ['Community Outreach'],
             'clean up' => ['Community Outreach'],
             'clean' => ['Community Outreach'],
-            'trash' => ['Community Outreach'],
+            'setup' => ['Community Outreach'],
             'food' => ['Community Outreach'],
             'outreach' => ['Community Outreach', 'Public Relations'],
             'public relation' => ['Public Relations'],
-            'bench' => ['Coastal Bench Building'],
         ];
     }
 }

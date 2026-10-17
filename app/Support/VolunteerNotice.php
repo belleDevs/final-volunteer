@@ -37,7 +37,7 @@ class VolunteerNotice
             $recipients++;
             $address = trim((string) $volunteer->email);
             $error = null;
-            $delivered = self::deliver($volunteer, $organization, $type, $title, $message, $events, $assignments, $error);
+            $delivered = self::deliver($volunteer, $organization, $type, $title, $message, $events, $assignments, null, null, $error);
             if ($delivered) {
                 $emails++;
                 $addresses[] = $address;
@@ -54,31 +54,90 @@ class VolunteerNotice
     }
 
     /**
-     * Tell the assigned volunteer about the task, and include their open events.
+     * Tell the newly assigned volunteer about this task (with accept/decline).
+     * When reassigned, the previous volunteer only gets a "no longer assigned" notice.
      */
-    public static function notifyAssignment(User $organization, User $volunteer, Task $task, ?User $previous = null): void
-    {
+    public static function notifyAssignment(
+        User $organization,
+        User $volunteer,
+        Task $task,
+        ?User $previous = null,
+        ?Assignment $assignment = null
+    ): void {
         $task->loadMissing('event');
         $reassigned = $previous && (int) $previous->id !== (int) $volunteer->id;
-        $title = $reassigned ? 'Task reassigned' : 'New task assigned';
-        $intro = $reassigned
-            ? 'This task was reassigned to you. Accept it to take the duty, or decline it.'
-            : 'You have been assigned to this task. Accept it to take the duty, or decline it.';
-        $message = $intro."\n\n".self::assignmentFacts($task, $reassigned ? $previous : null, $volunteer);
-        $events = self::upcomingEvents($organization);
-        $assignments = self::openAssignments($organization, $volunteer);
-        $emailed = self::deliver($volunteer, $organization, 'task', $title, $message, $events, $assignments) ? 1 : 0;
-        $recipients = 1;
 
-        if ($reassigned) {
-            $previousMessage = 'This task was reassigned to '.$volunteer->name.".\n\n".self::assignmentFacts($task, $previous, $volunteer);
-            $recipients++;
-            if (self::deliver($previous, $organization, 'task', 'Task reassigned', $previousMessage, $events, collect())) {
-                $emailed++;
+        $assignment = $assignment
+            ?? Assignment::where('task_id', $task->id)
+                ->where('user_id', $volunteer->id)
+                ->with(['task', 'event'])
+                ->first();
+
+        if ($assignment) {
+            $assignment->loadMissing(['task', 'event']);
+            if ((int) $assignment->user_id !== (int) $volunteer->id) {
+                $assignment = Assignment::where('task_id', $task->id)
+                    ->where('user_id', $volunteer->id)
+                    ->with(['task', 'event'])
+                    ->first();
             }
         }
 
-        self::record($organization, 'task', $title, $message, $recipients, $emailed);
+        $title = $reassigned ? 'Task reassigned to you' : 'You have been assigned a task';
+        $message = $reassigned
+            ? $organization->name.' reassigned a volunteer role to you. Please confirm whether you can take it.'
+            : $organization->name.' assigned you a volunteer role. Please confirm whether you can take it.';
+        $focus = $assignment ? collect([$assignment]) : collect();
+        [$acceptUrl, $declineUrl] = self::assignmentActionUrls($assignment, $volunteer);
+
+        // New assignee always gets portal + email (with accept/decline).
+        $emailError = null;
+        $emailed = self::deliver(
+            $volunteer,
+            $organization,
+            'task',
+            $title,
+            $message,
+            collect(),
+            $focus,
+            $acceptUrl,
+            $declineUrl,
+            $emailError,
+            true,
+            true,
+        ) ? 1 : 0;
+        $recipients = 1;
+
+        // Previous volunteer: portal only (no email) so reassignment mail goes only to the new assignee.
+        if ($reassigned && $previous && (int) $previous->id !== (int) $volunteer->id) {
+            $previousTitle = 'You were removed from a task';
+            $previousMessage = $organization->name.' reassigned "'.$task->title.'" to '.$volunteer->name
+                .'. You are no longer responsible for this task on "'.($task->event->title ?? 'the event').'".';
+            $recipients++;
+            self::deliver(
+                $previous,
+                $organization,
+                'task',
+                $previousTitle,
+                $previousMessage,
+                collect(),
+                collect(),
+                null,
+                null,
+                $emailError,
+                true,
+                false,
+            );
+        }
+
+        self::record(
+            $organization,
+            'task',
+            $title,
+            $message."\n\n".self::assignmentFacts($task, $reassigned ? $previous : null, $volunteer),
+            $recipients,
+            $emailed
+        );
     }
 
     /**
@@ -177,12 +236,24 @@ class VolunteerNotice
         }
 
         $when = $event->start_time ? $event->start_time->format('M d, Y g:i A') : 'a scheduled date';
-        self::broadcast(
-            $organization,
-            'event',
-            'New event: '.$event->title,
-            $event->title.' is now open'.($event->location ? ' at '.$event->location : '').' on '.$when.'.'
-        );
+        $title = 'New event from '.$organization->name;
+        $message = '"'.$event->title.'" is now open'
+            .($event->location ? ' at '.$event->location : '')
+            .' on '.$when.'.';
+        $focus = collect([$event]);
+        $recipients = 0;
+        $emails = 0;
+
+        foreach (self::recipients($organization, 'event') as $volunteer) {
+            $recipients++;
+            if (self::deliver($volunteer, $organization, 'event', $title, $message, $focus, collect())) {
+                $emails++;
+            }
+        }
+
+        if ($recipients > 0) {
+            self::record($organization, 'event', $title, $message, $recipients, $emails);
+        }
     }
 
     public static function linkedVolunteers(User $organization): Collection
@@ -240,30 +311,44 @@ class VolunteerNotice
         string $message,
         Collection $events,
         Collection $assignments,
-        ?string &$error = null
+        ?string $acceptUrl = null,
+        ?string $declineUrl = null,
+        ?string &$error = null,
+        bool $forcePortal = false,
+        bool $forceEmail = false,
     ): bool {
         $error = null;
-        if (!$volunteer->wantsVolunteerNotice($type)) {
-            return false;
+        $wantsNotice = $forceEmail || $volunteer->wantsVolunteerNotice($type);
+
+        $section = match ($type) {
+            'task' => 'tasks',
+            'event' => 'events',
+            'certificate' => 'certificates',
+            default => 'notifications',
+        };
+        $dashboardUrl = url('/volunteer/dashboard?section='.$section);
+        // Email buttons go through /email/continue so guests hit login instead of a 403.
+        $emailPortalUrl = route('email.continue', ['section' => $section]);
+
+        // Assignment changes should always appear in the portal inbox even if email is opted out.
+        if ($forcePortal || $wantsNotice) {
+            PortalNotifier::send(
+                (int) $volunteer->id,
+                $title,
+                Str::limit(preg_replace('/\s+/', ' ', $message) ?? $message, 160),
+                $message,
+                match ($type) {
+                    'event' => 'fa-calendar',
+                    'task' => 'fa-list-check',
+                    default => 'fa-bell',
+                },
+                $dashboardUrl
+            );
         }
 
-        PortalNotifier::send(
-            (int) $volunteer->id,
-            $title,
-            Str::limit(preg_replace('/\s+/', ' ', $message) ?? $message, 160),
-            $message,
-            match ($type) {
-                'event' => 'fa-calendar',
-                'task' => 'fa-list-check',
-                default => 'fa-bell',
-            },
-            route('volunteer.dashboard', ['section' => match ($type) {
-                'task' => 'tasks',
-                'event' => 'events',
-                'certificate' => 'certificates',
-                default => 'notifications',
-            }])
-        );
+        if (!$wantsNotice && !$forceEmail) {
+            return false;
+        }
 
         $address = trim((string) $volunteer->email);
         if (!filter_var($address, FILTER_VALIDATE_EMAIL)) {
@@ -272,7 +357,18 @@ class VolunteerNotice
             return false;
         }
 
-        $mail = new VolunteerNoticeMail($volunteer, $organization, $title, $message, $events, $assignments);
+        $mail = new VolunteerNoticeMail(
+            $volunteer,
+            $organization,
+            $title,
+            $message,
+            $events,
+            $assignments,
+            $type,
+            $acceptUrl,
+            $declineUrl,
+            $emailPortalUrl,
+        );
 
         $from = filter_var($organization->email, FILTER_VALIDATE_EMAIL)
             ? $organization->email
@@ -300,6 +396,59 @@ class VolunteerNotice
 
             return false;
         }
+    }
+
+    /**
+     * Build accept/decline links with an HMAC token (more reliable than host-bound signed URLs).
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private static function assignmentActionUrls(?Assignment $assignment, User $volunteer): array
+    {
+        if (!$assignment || (int) $assignment->user_id !== (int) $volunteer->id) {
+            return [null, null];
+        }
+
+        return [
+            self::assignmentActionUrl($assignment, $volunteer, 'accept'),
+            self::assignmentActionUrl($assignment, $volunteer, 'decline'),
+        ];
+    }
+
+    public static function assignmentActionUrl(Assignment $assignment, User $volunteer, string $decision): string
+    {
+        $expires = now()->addDays(7)->timestamp;
+        $token = self::assignmentActionToken((int) $assignment->id, (int) $volunteer->id, $decision, $expires);
+
+        return url('/volunteer/assignments/'.$assignment->id.'/email-respond/'.$decision)
+            .'?user='.$volunteer->id
+            .'&expires='.$expires
+            .'&token='.urlencode($token);
+    }
+
+    public static function assignmentActionToken(int $assignmentId, int $userId, string $decision, int $expires): string
+    {
+        return hash_hmac(
+            'sha256',
+            $assignmentId.'|'.$userId.'|'.$decision.'|'.$expires,
+            (string) config('app.key')
+        );
+    }
+
+    public static function assignmentActionTokenIsValid(
+        int $assignmentId,
+        int $userId,
+        string $decision,
+        int $expires,
+        string $token
+    ): bool {
+        if ($expires < now()->timestamp) {
+            return false;
+        }
+
+        $expected = self::assignmentActionToken($assignmentId, $userId, $decision, $expires);
+
+        return hash_equals($expected, $token);
     }
 
     private static function recipients(User $organization, string $type): Collection
