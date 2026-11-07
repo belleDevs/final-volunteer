@@ -17,4 +17,14 @@ class ExampleTest extends TestCase
         $response->assertStatus(302);
         $response->assertRedirect('/login');
     }
+
+    public function test_forwarded_https_requests_generate_secure_asset_urls(): void
+    {
+        $response = $this->get('/login', [
+            'X-Forwarded-Proto' => 'https',
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('https://127.0.0.1:8000/build/assets/app-', false);
+    }
 }
