@@ -29,7 +29,7 @@ return [
     | when delivering an email. You may specify which one you're using for
     | your mailers below. You may also add additional mailers if needed.
     |
-    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
+    | Supported: "smtp", "resend", "sendmail", "mailgun", "ses", "ses-v2",
     |            "postmark", "log", "array", "failover", "roundrobin"
     |
     */
@@ -46,6 +46,10 @@ return [
             'password' => env('MAIL_PASSWORD'),
             'timeout' => env('MAIL_TIMEOUT', 10),
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
+        ],
+
+        'resend' => [
+            'transport' => 'resend',
         ],
 
         'ses' => [

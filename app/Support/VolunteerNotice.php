@@ -263,6 +263,10 @@ class VolunteerNotice
 
     public static function mailIsReady(): bool
     {
+        if (config('mail.default') === 'resend') {
+            return filled(config('services.resend.key'));
+        }
+
         return config('mail.default') === 'smtp'
             && filled(config('mail.mailers.smtp.host'))
             && filled(config('mail.mailers.smtp.username'))
