@@ -73,7 +73,7 @@
                         <span class="min-w-0 flex-1 truncate">{{ $item['label'] }}</span>
                         @if($item['key'] === 'notifications' && ($orgUnreadCount ?? 0) > 0)
                             <span class="ml-auto rounded-full px-2 py-0.5 text-[10px] font-black {{ $isActive ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-600' }}">{{ $orgUnreadCount > 99 ? '99+' : $orgUnreadCount }}</span>
-                        @endif
+                    @endif
                     </a>
                 @endforeach
             </nav>
@@ -124,15 +124,15 @@
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-jci-blue text-xs font-bold text-white">{{ strtoupper($orgInitials) }}</span>
                         @endif
                     </a>
-                </div>
-            </header>
+            </div>
+        </header>
 
             <div id="org-content" class="min-h-0 flex-1 overflow-y-auto">
             <main class="flex-1">
                 <div id="org-page" class="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8">
-                    {{ $slot }}
+            {{ $slot }}
                 </div>
-            </main>
+        </main>
             </div>
         </div>
     </div>

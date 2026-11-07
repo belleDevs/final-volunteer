@@ -195,8 +195,8 @@
                                                     @if($event->status === 'published' && $task->status !== 'completed')
                                                         <form action="{{ route('org.tasks.outreach', $task->id) }}" method="POST" class="mt-2">
                                                             @csrf
-                                                            <button type="submit" class="bg-jci-blue hover:bg-jci-dark text-white text-[9px] font-black px-2.5 py-1.5 rounded-lg transition inline-flex items-center gap-1">
-                                                                <i class="fa-solid fa-envelope"></i> Invite
+                                                            <button type="submit" class="bg-jci-blue hover:bg-jci-dark text-white text-[9px] font-black px-2.5 py-1.5 rounded-lg transition inline-flex items-center gap-1" title="Portal notice and email">
+                                                                <i class="fa-solid fa-paper-plane"></i> Invite (email)
                                                             </button>
                                                         </form>
                                                     @endif
@@ -593,7 +593,7 @@
                             <form action="{{ route('org.tasks.outreach', $selectedTask->id) }}" method="POST">
                                 @csrf
                                 <button type="submit" class="w-full bg-jci-blue hover:bg-jci-dark text-white text-[10px] font-black px-3 py-2.5 rounded-xl transition flex items-center justify-center gap-1">
-                                    <i class="fa-solid fa-paper-plane"></i> Email Matching Volunteers
+                                    <i class="fa-solid fa-paper-plane"></i> Invite by email
                                 </button>
                             </form>
                         @endif

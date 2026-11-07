@@ -15,7 +15,7 @@
         @include('volunteer.sections.messages')
     @elseif($section === 'settings')
         @include('volunteer.sections.settings')
-    @else
+                @else
         @include('volunteer.sections.home')
-    @endif
+            @endif
 </x-layout.volunteer>

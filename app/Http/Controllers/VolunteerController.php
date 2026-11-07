@@ -1209,6 +1209,7 @@ class VolunteerController extends Controller
 
         if ($section === 'preferences') {
             $preferences = $volunteer->notification_preferences ?? [];
+            unset($preferences['sms']);
             foreach (['assignments', 'events', 'certificates', 'reminders'] as $key) {
                 $preferences[$key] = $request->boolean($key);
             }

@@ -67,13 +67,15 @@
         <input type="hidden" name="section" value="preferences">
         <div>
             <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Notification preferences</h2>
-            <p class="mt-1 text-xs text-slate-400">Choose which notices appear in your bell and notification list.</p>
+            <p class="mt-1 text-xs text-slate-400">Choose which notices appear in your bell and email.</p>
         </div>
         <div class="space-y-2.5">
             @foreach(['assignments' => 'Task assignments', 'events' => 'Event notices', 'certificates' => 'Certificates', 'reminders' => 'Reminders and other notices'] as $key => $label)
                 <label class="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5 text-sm text-slate-700 dark:border-slate-800 dark:text-slate-200">
                     <input type="checkbox" name="{{ $key }}" value="1" @checked($preferences[$key] ?? true) class="rounded border-slate-300 text-jci-blue focus:ring-jci-blue">
-                    {{ $label }}
+                    <span class="min-w-0">
+                        <span class="block">{{ $label }}</span>
+                    </span>
                 </label>
             @endforeach
         </div>

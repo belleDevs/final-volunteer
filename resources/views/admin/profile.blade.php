@@ -18,11 +18,11 @@
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div class="flex items-end gap-4 -mt-12 sm:-mt-14">
                         <form action="{{ route('profile.update') }}" method="POST" enctype="multipart/form-data" id="admin-avatar-form" class="relative shrink-0">
-                            @csrf
-                            <input type="hidden" name="section" value="profile">
-                            <input type="hidden" name="name" value="{{ $user->name }}">
-                            <input type="hidden" name="email" value="{{ $user->email }}">
-                            <input type="hidden" name="phone" value="{{ $user->phone }}">
+                @csrf
+                <input type="hidden" name="section" value="profile">
+                <input type="hidden" name="name" value="{{ $user->name }}">
+                <input type="hidden" name="email" value="{{ $user->email }}">
+                <input type="hidden" name="phone" value="{{ $user->phone }}">
                             <label for="admin-avatar-input" class="group relative block cursor-pointer" title="Change photo">
                                 <span class="block overflow-hidden rounded-2xl border-4 border-white shadow-md dark:border-slate-900">
                                     @if($user->profile_photo_path)
@@ -35,7 +35,7 @@
                                 <span class="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-jci-blue shadow-sm transition group-hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-800">
                                     <i class="fa-solid fa-camera text-xs"></i>
                                 </span>
-                            </label>
+                </label>
                             <input id="admin-avatar-input" type="file" name="profile_photo" accept="image/jpeg,image/png,image/webp" class="hidden" onchange="previewAdminAvatar(this)">
                         </form>
                         <div class="min-w-0 pb-1">
@@ -108,30 +108,30 @@
                         <p class="mt-1 text-xs text-slate-400">Name and contact details for this admin account. Role cannot be changed.</p>
                     </div>
                     <form action="{{ route('profile.update') }}" method="POST" class="mt-5 space-y-4">
-                        @csrf
-                        <input type="hidden" name="section" value="profile">
+                    @csrf
+                    <input type="hidden" name="section" value="profile">
                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <label class="{{ $label }}">Full name <span class="text-rose-500">*</span>
                                 <input type="text" name="name" value="{{ old('name', $user->name) }}" required class="{{ $field }} @error('name') border-rose-500 @enderror">
                                 @error('name')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
-                            </label>
+                        </label>
                             <label class="{{ $label }}">Role
                                 <input type="text" value="System Admin" readonly class="{{ $field }} bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
-                            </label>
+                        </label>
                             <label class="{{ $label }}">Email <span class="text-rose-500">*</span>
                                 <input type="email" name="email" value="{{ old('email', $user->email) }}" required class="{{ $field }} @error('email') border-rose-500 @enderror">
                                 @error('email')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
-                            </label>
+                        </label>
                             <label class="{{ $label }}">Mobile
                                 <input type="text" name="phone" value="{{ old('phone', $user->phone) }}" placeholder="e.g. 09123456789" class="{{ $field }} @error('phone') border-rose-500 @enderror">
                                 @error('phone')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
-                            </label>
-                        </div>
+                        </label>
+                    </div>
                         <div class="flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800">
                             <button type="submit" class="rounded-xl bg-jci-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-jci-dark">Save changes</button>
-                        </div>
-                    </form>
-                </section>
+                    </div>
+                </form>
+            </section>
 
                 <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -161,8 +161,8 @@
                     </div>
 
                     <form id="admin-password-form" action="{{ route('profile.update') }}" method="POST" class="{{ $showPasswordForm ? '' : 'hidden' }} mt-4 space-y-4">
-                        @csrf
-                        <input type="hidden" name="section" value="password">
+                    @csrf
+                    <input type="hidden" name="section" value="password">
                         <label class="{{ $label }}">Current password <span class="text-rose-500">*</span>
                             <input type="password" name="current_password" autocomplete="current-password" required class="{{ $field }}">
                             @error('current_password')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
@@ -171,10 +171,10 @@
                             <label class="{{ $label }}">New password <span class="text-rose-500">*</span>
                                 <input type="password" name="password" autocomplete="new-password" required minlength="8" class="{{ $field }}">
                                 @error('password')<p class="mt-1 text-xs font-semibold text-rose-600">{{ $message }}</p>@enderror
-                            </label>
+                        </label>
                             <label class="{{ $label }}">Confirm new password <span class="text-rose-500">*</span>
                                 <input type="password" name="password_confirmation" autocomplete="new-password" required minlength="8" class="{{ $field }}">
-                            </label>
+                        </label>
                         </div>
                         <div class="flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800">
                             <button type="submit" class="rounded-xl bg-jci-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-jci-dark">Update password</button>
@@ -223,7 +223,7 @@
                             </div>
                         @endforelse
                     </div>
-                </section>
+            </section>
             </div>
         </div>
     </div>

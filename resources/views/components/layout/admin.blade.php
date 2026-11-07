@@ -61,9 +61,9 @@
                         @php
                             $postedEventTotal = \App\Models\Event::count();
                         @endphp
-                        @if ($postedEventTotal > 0)
+                            @if ($postedEventTotal > 0)
                             <span class="ml-auto {{ $activeTab === 'events' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $postedEventTotal }}</span>
-                        @endif
+                            @endif
                     </a>
 
                     <a href="{{ route('admin.dashboard', ['tab' => 'tasks']) }}"
@@ -240,10 +240,10 @@
                 apply(true);
             }
             if (hideButton) {
-                hideButton.addEventListener('click', function () { apply(true); });
+            hideButton.addEventListener('click', function () { apply(true); });
             }
             if (showButton) {
-                showButton.addEventListener('click', function () { apply(false); });
+            showButton.addEventListener('click', function () { apply(false); });
             }
 
             function closeMobile() {

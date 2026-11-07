@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780">
+  <rect width="1200" height="780" fill="#ffffff"/>
+
+  <!-- Lifeline headers -->
+  <rect x="40" y="20" width="140" height="44" rx="6" fill="#eff6ff" stroke="#1e3a5f" stroke-width="1.6"/>
+  <text x="110" y="47" text-anchor="middle" font-family="Arial" font-size="13" font-weight="700" fill="#111">Organization</text>
+
+  <rect x="240" y="20" width="170" height="44" rx="6" fill="#eff6ff" stroke="#1e3a5f" stroke-width="1.6"/>
+  <text x="325" y="47" text-anchor="middle" font-family="Arial" font-size="13" font-weight="700" fill="#111">VolunteerHub</text>
+
+  <rect x="470" y="20" width="150" height="44" rx="6" fill="#ecfdf5" stroke="#065f46" stroke-width="1.6"/>
+  <text x="545" y="47" text-anchor="middle" font-family="Arial" font-size="13" font-weight="700" fill="#111">MySQL DB</text>
+
+  <rect x="680" y="20" width="190" height="44" rx="6" fill="#fff7ed" stroke="#9a3412" stroke-width="1.6"/>
+  <text x="775" y="40" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#111">Notification</text>
+  <text x="775" y="55" text-anchor="middle" font-family="Arial" font-size="10" fill="#444">(Email and In-App)</text>
+
+  <rect x="940" y="20" width="140" height="44" rx="6" fill="#f5f3ff" stroke="#5b21b6" stroke-width="1.6"/>
+  <text x="1010" y="47" text-anchor="middle" font-family="Arial" font-size="13" font-weight="700" fill="#111">Volunteer</text>
+
+  <!-- Lifelines -->
+  <line x1="110" y1="64" x2="110" y2="730" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <line x1="325" y1="64" x2="325" y2="730" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <line x1="545" y1="64" x2="545" y2="730" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <line x1="775" y1="64" x2="775" y2="730" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <line x1="1010" y1="64" x2="1010" y2="730" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="5 4"/>
+
+  <!-- Activation bars (system) -->
+  <rect x="317" y="90" width="16" height="620" fill="#bfdbfe" stroke="#1e3a5f" stroke-width="0.8"/>
+
+  <!-- Messages -->
+  <!-- 1 Org -> System -->
+  <line x1="110" y1="100" x2="317" y2="100" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="210" y="94" text-anchor="middle" font-family="Arial" font-size="11">1. Assign volunteer to task</text>
+
+  <!-- 2 System -> DB -->
+  <line x1="333" y1="140" x2="545" y2="140" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="440" y="134" text-anchor="middle" font-family="Arial" font-size="11">2. Create Assignment (pending)</text>
+
+  <!-- 3 DB --> System -->
+  <line x1="545" y1="175" x2="333" y2="175" stroke="#111" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+  <text x="440" y="169" text-anchor="middle" font-family="Arial" font-size="11">3. Assignment saved</text>
+
+  <!-- 4 System -> Notification -->
+  <line x1="333" y1="220" x2="775" y2="220" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="560" y="214" text-anchor="middle" font-family="Arial" font-size="11">4. Send task assignment notice</text>
+
+  <!-- 5 Notification -> Volunteer -->
+  <line x1="775" y1="260" x2="1010" y2="260" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="890" y="254" text-anchor="middle" font-family="Arial" font-size="11">5. Deliver email and in-app alert</text>
+
+  <!-- 6 Volunteer -> System -->
+  <line x1="1010" y1="310" x2="333" y2="310" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="670" y="304" text-anchor="middle" font-family="Arial" font-size="11">6. Accept assignment</text>
+
+  <!-- 7 System -> DB -->
+  <line x1="333" y1="350" x2="545" y2="350" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="440" y="344" text-anchor="middle" font-family="Arial" font-size="11">7. Update status = accepted</text>
+
+  <!-- 8 Volunteer -> System -->
+  <line x1="1010" y1="400" x2="333" y2="400" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="670" y="394" text-anchor="middle" font-family="Arial" font-size="11">8. Submit task evidence</text>
+
+  <!-- 9 System -> DB -->
+  <line x1="333" y1="440" x2="545" y2="440" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="440" y="434" text-anchor="middle" font-family="Arial" font-size="11">9. Save proof, status = submitted</text>
+
+  <!-- 10 Org -> System -->
+  <line x1="110" y1="490" x2="317" y2="490" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="210" y="484" text-anchor="middle" font-family="Arial" font-size="11">10. Approve completion</text>
+
+  <!-- 11 System -> DB -->
+  <line x1="333" y1="530" x2="545" y2="530" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="440" y="524" text-anchor="middle" font-family="Arial" font-size="11">11. Update status = completed</text>
+
+  <!-- 12 Org -> System -->
+  <line x1="110" y1="580" x2="317" y2="580" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="210" y="574" text-anchor="middle" font-family="Arial" font-size="11">12. Issue certificate</text>
+
+  <!-- 13 System -> DB -->
+  <line x1="333" y1="620" x2="545" y2="620" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="440" y="614" text-anchor="middle" font-family="Arial" font-size="11">13. Create Certificate record</text>
+
+  <!-- 14 System -> Notification -->
+  <line x1="333" y1="660" x2="775" y2="660" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="560" y="654" text-anchor="middle" font-family="Arial" font-size="11">14. Notify volunteer</text>
+
+  <!-- 15 Notification -> Volunteer -->
+  <line x1="775" y1="700" x2="1010" y2="700" stroke="#111" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="890" y="694" text-anchor="middle" font-family="Arial" font-size="11">15. Certificate available</text>
+
+  <text x="600" y="760" text-anchor="middle" font-family="Arial" font-size="11" fill="#64748b">VolunteerHub - Sequence Diagram (Task Assignment to Certificate)</text>
+
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#111"/>
+    </marker>
+  </defs>
+</svg>

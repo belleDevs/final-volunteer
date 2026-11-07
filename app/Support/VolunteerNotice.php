@@ -90,7 +90,7 @@ class VolunteerNotice
         $focus = $assignment ? collect([$assignment]) : collect();
         [$acceptUrl, $declineUrl] = self::assignmentActionUrls($assignment, $volunteer);
 
-        // New assignee always gets portal + email (with accept/decline).
+        // New assignee: portal + email.
         $emailError = null;
         $emailed = self::deliver(
             $volunteer,
@@ -346,56 +346,56 @@ class VolunteerNotice
             );
         }
 
-        if (!$wantsNotice && !$forceEmail) {
+        if (! $wantsNotice && ! $forceEmail) {
             return false;
         }
 
+        $emailed = false;
         $address = trim((string) $volunteer->email);
-        if (!filter_var($address, FILTER_VALIDATE_EMAIL)) {
-            $error = 'No email address is saved on this account.';
 
-            return false;
-        }
+        if (filter_var($address, FILTER_VALIDATE_EMAIL)) {
+            $mail = new VolunteerNoticeMail(
+                $volunteer,
+                $organization,
+                $title,
+                $message,
+                $events,
+                $assignments,
+                $type,
+                $acceptUrl,
+                $declineUrl,
+                $emailPortalUrl,
+            );
 
-        $mail = new VolunteerNoticeMail(
-            $volunteer,
-            $organization,
-            $title,
-            $message,
-            $events,
-            $assignments,
-            $type,
-            $acceptUrl,
-            $declineUrl,
-            $emailPortalUrl,
-        );
+            $from = filter_var($organization->email, FILTER_VALIDATE_EMAIL)
+                ? $organization->email
+                : 'org@volunteerhub.ph';
 
-        $from = filter_var($organization->email, FILTER_VALIDATE_EMAIL)
-            ? $organization->email
-            : 'org@volunteerhub.ph';
-
-        $smtpError = null;
-        if (self::mailIsReady()) {
-            try {
-                Mail::to($address)->send($mail);
-
-                return true;
-            } catch (\Throwable $exception) {
-                report($exception);
-                $smtpError = $exception->getMessage();
+            $smtpError = null;
+            if (self::mailIsReady()) {
+                try {
+                    Mail::to($address)->send($mail);
+                    $emailed = true;
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    $smtpError = $exception->getMessage();
+                }
             }
+
+            if (! $emailed) {
+                try {
+                    RegisteredMailbox::send($address, $title, $mail->render(), $from, $organization->name);
+                    $emailed = true;
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    $error = self::deliveryError($smtpError, $exception->getMessage());
+                }
+            }
+        } else {
+            $error = 'No email address is saved on this account.';
         }
 
-        try {
-            RegisteredMailbox::send($address, $title, $mail->render(), $from, $organization->name);
-
-            return true;
-        } catch (\Throwable $exception) {
-            report($exception);
-            $error = self::deliveryError($smtpError, $exception->getMessage());
-
-            return false;
-        }
+        return $emailed;
     }
 
     /**

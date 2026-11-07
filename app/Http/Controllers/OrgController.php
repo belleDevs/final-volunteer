@@ -1774,20 +1774,33 @@ class OrgController extends Controller
                 ->with('error', 'This task already has an assigned volunteer. Create or select another open task before sending an invite.');
         }
 
+        $organization = $task->event->organization;
+        $orgId = (int) $task->event->organization_id;
         $requiredSkillIds = $task->skills->pluck('id');
 
+        // Recruit from current and past org-linked volunteers (including inactive), not every platform user.
         $volunteersQuery = User::where('role', 'volunteer')
             ->where('status', 'approved')
-            ->whereNotNull('email')
+            ->where(function ($query) use ($orgId) {
+                $query->where('organization_id', $orgId)
+                    ->orWhereHas('assignments.event', function ($event) use ($orgId) {
+                        $event->where('organization_id', $orgId);
+                    })
+                    ->orWhereHas('organizationApplications', function ($application) use ($orgId) {
+                        $application->where('organization_id', $orgId);
+                    });
+            })
             ->with('skills');
 
         if ($requiredSkillIds->isNotEmpty()) {
-            $volunteersQuery->whereHas('skills', function ($query) use ($requiredSkillIds) {
-                $query->whereIn('skills.id', $requiredSkillIds);
+            $volunteersQuery->where(function ($query) use ($requiredSkillIds) {
+                $query->whereHas('skills', function ($skills) use ($requiredSkillIds) {
+                    $skills->whereIn('skills.id', $requiredSkillIds);
+                })->orWhereIn('availability', ['limited', 'inactive']);
             });
         }
 
-        $volunteers = $volunteersQuery->orderBy('name')->get();
+        $volunteers = $volunteersQuery->orderBy('name')->get()->unique('id')->values();
 
         if ($volunteers->isEmpty()) {
             AuditTrail::record([
@@ -1801,12 +1814,13 @@ class OrgController extends Controller
             ]);
 
             return redirect()->route('org.dashboard', ['task_id' => $task->id])
-                ->with('error', 'No approved volunteers with email addresses matched this task yet.');
+                ->with('error', 'No current or past volunteers from your organization matched this task yet.');
         }
 
         $sentCount = 0;
         $failedRecipients = [];
         $now = Carbon::now();
+        $inviteMessage = ($organization->name ?? 'A partner organization').' is inviting volunteers for "'.$task->event->title.'". Open your dashboard to apply.';
 
         foreach ($volunteers as $volunteer) {
             DB::table('notifications')->insert([
@@ -1815,8 +1829,8 @@ class OrgController extends Controller
                 'notifiable_type' => 'App\\Models\\User',
                 'notifiable_id' => $volunteer->id,
                 'data' => json_encode([
-                    'title' => 'Volunteer Needed: ' . $task->title,
-                    'message' => ($task->event->organization->name ?? 'A partner organization') . ' is inviting volunteers for "' . $task->event->title . '". Open your dashboard to apply.',
+                    'title' => 'Volunteer Needed: '.$task->title,
+                    'message' => $inviteMessage,
                     'icon' => 'fa-hand-holding-heart',
                 ]),
                 'read_at' => null,
@@ -1824,15 +1838,17 @@ class OrgController extends Controller
                 'updated_at' => $now,
             ]);
 
-            try {
-                Mail::to($volunteer->email)->send(new TaskVolunteerInviteMail($task, $volunteer));
-                $sentCount++;
-            } catch (\Throwable $exception) {
-                $failedRecipients[] = [
-                    'user_id' => $volunteer->id,
-                    'email' => $volunteer->email,
-                    'error' => 'Email delivery failed. Check mail configuration or recipient address.',
-                ];
+            if (filter_var((string) $volunteer->email, FILTER_VALIDATE_EMAIL)) {
+                try {
+                    Mail::to($volunteer->email)->send(new TaskVolunteerInviteMail($task, $volunteer));
+                    $sentCount++;
+                } catch (\Throwable $exception) {
+                    $failedRecipients[] = [
+                        'user_id' => $volunteer->id,
+                        'email' => $volunteer->email,
+                        'error' => 'Email delivery failed. Check mail configuration or recipient address.',
+                    ];
+                }
             }
         }
 
@@ -1860,8 +1876,8 @@ class OrgController extends Controller
             'action' => 'Task invite sent',
             'action_type' => 'other',
             'module' => 'Tasks',
-            'description' => 'Invited '.$volunteers->count().' volunteer(s) to "'.$task->title.'".',
-            'status' => count($failedRecipients) === $volunteers->count() && $sentCount === 0 ? 'success' : 'success',
+            'description' => 'Invited '.$volunteers->count().' volunteer(s) to "'.$task->title.'" (email recruitment).',
+            'status' => 'success',
             'subject' => $task,
             'subject_label' => $task->title,
             'new' => [
@@ -1871,14 +1887,14 @@ class OrgController extends Controller
             ],
         ]);
 
-        $message = "Task invite sent to {$volunteers->count()} approved volunteer(s). Portal notifications were delivered.";
-        $message .= $sentCount > 0 ? " Email sent to {$sentCount}." : ' No emails were sent; check Gmail SMTP settings.';
+        $message = "Recruitment invite sent to {$volunteers->count()} volunteer(s). Portal notices delivered.";
+        $message .= $sentCount > 0 ? " Email: {$sentCount}." : ' No emails sent.';
         if (count($failedRecipients) > 0) {
             $message .= ' Some email deliveries failed and were recorded for review.';
         }
 
         return redirect()->route('org.dashboard', ['task_id' => $task->id])
-            ->with(count($failedRecipients) === $volunteers->count() ? 'error' : 'success', $message);
+            ->with('success', $message);
     }
 
     /**

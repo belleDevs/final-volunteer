@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="800" viewBox="0 0 780 800">
+  <rect width="780" height="800" fill="#ffffff"/>
+  <rect x="130" y="14" width="630" height="772" fill="none" stroke="#111827" stroke-width="2.4"/>
+
+  <!-- ADMIN -->
+  <g transform="translate(58,115)">
+    <circle cx="0" cy="-36" r="15" fill="none" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="-21" x2="0" y2="22" stroke="#111827" stroke-width="2.3"/>
+    <line x1="-22" y1="-3" x2="22" y2="-3" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="22" x2="-16" y2="48" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="22" x2="16" y2="48" stroke="#111827" stroke-width="2.3"/>
+    <text x="0" y="68" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700">Administrator</text>
+  </g>
+
+  <ellipse cx="285" cy="45" rx="115" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="49" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Login</text>
+  <ellipse cx="545" cy="45" rx="130" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="49" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11">Review Organization Registrations</text>
+
+  <ellipse cx="285" cy="95" rx="115" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="99" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Manage Users</text>
+  <ellipse cx="545" cy="95" rx="130" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="99" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Monitor Events and Tasks</text>
+
+  <ellipse cx="285" cy="145" rx="115" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="149" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Send System Notices</text>
+  <ellipse cx="545" cy="145" rx="130" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="149" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Generate Reports</text>
+
+  <ellipse cx="285" cy="195" rx="115" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="199" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">View Audit Logs</text>
+  <ellipse cx="545" cy="195" rx="130" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="199" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Manage Chatbot Rules</text>
+
+  <line x1="80" y1="105" x2="170" y2="45" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="110" x2="170" y2="95" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="118" x2="170" y2="145" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="125" x2="170" y2="195" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="100" x2="415" y2="45" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="112" x2="415" y2="95" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="120" x2="415" y2="145" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="128" x2="415" y2="195" stroke="#111827" stroke-width="1.15"/>
+
+  <!-- ORGANIZATION -->
+  <g transform="translate(58,390)">
+    <circle cx="0" cy="-36" r="15" fill="none" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="-21" x2="0" y2="22" stroke="#111827" stroke-width="2.3"/>
+    <line x1="-22" y1="-3" x2="22" y2="-3" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="22" x2="-16" y2="48" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="22" x2="16" y2="48" stroke="#111827" stroke-width="2.3"/>
+    <text x="0" y="68" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700">Organization</text>
+  </g>
+
+  <ellipse cx="285" cy="265" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="269" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Register and Verify Email</text>
+  <ellipse cx="545" cy="265" rx="85" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="269" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Login</text>
+
+  <ellipse cx="285" cy="315" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="319" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Create and Manage Events</text>
+  <ellipse cx="545" cy="315" rx="105" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="319" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Assign Tasks</text>
+
+  <ellipse cx="285" cy="365" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="369" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11">Monitor Volunteers and Applicants</text>
+  <ellipse cx="545" cy="365" rx="110" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="369" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Send Notifications</text>
+
+  <ellipse cx="285" cy="415" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="419" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Issue Certificates</text>
+  <ellipse cx="545" cy="415" rx="125" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="419" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11.5">Manage Gallery and Documents</text>
+
+  <ellipse cx="285" cy="465" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="469" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Reply to Messages</text>
+  <ellipse cx="545" cy="465" rx="105" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="469" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Generate Reports</text>
+
+  <line x1="80" y1="375" x2="165" y2="265" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="385" x2="165" y2="315" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="395" x2="165" y2="365" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="405" x2="165" y2="415" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="415" x2="165" y2="465" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="370" x2="420" y2="265" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="380" x2="440" y2="315" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="390" x2="435" y2="365" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="400" x2="420" y2="415" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="410" x2="440" y2="465" stroke="#111827" stroke-width="1.15"/>
+
+  <!-- VOLUNTEER -->
+  <g transform="translate(58,675)">
+    <circle cx="0" cy="-36" r="15" fill="none" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="-21" x2="0" y2="22" stroke="#111827" stroke-width="2.3"/>
+    <line x1="-22" y1="-3" x2="22" y2="-3" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="22" x2="-16" y2="48" stroke="#111827" stroke-width="2.3"/>
+    <line x1="0" y1="22" x2="16" y2="48" stroke="#111827" stroke-width="2.3"/>
+    <text x="0" y="68" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700">Volunteer</text>
+  </g>
+
+  <ellipse cx="285" cy="535" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="539" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Register and Verify Email</text>
+  <ellipse cx="545" cy="535" rx="95" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="539" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Login / Logout</text>
+
+  <ellipse cx="285" cy="585" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="589" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11">Update Profile, Skills &amp; Availability</text>
+  <ellipse cx="545" cy="585" rx="115" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="589" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">View Events and Tasks</text>
+
+  <ellipse cx="285" cy="635" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="639" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Accept or Decline Tasks</text>
+  <ellipse cx="545" cy="635" rx="115" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="639" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Submit Task Evidence</text>
+
+  <ellipse cx="285" cy="685" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="689" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Receive Notifications</text>
+  <ellipse cx="545" cy="685" rx="105" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="689" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Access Certificates</text>
+
+  <ellipse cx="285" cy="735" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="285" y="739" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12">Use Chatbot Assistance</text>
+  <ellipse cx="545" cy="735" rx="120" ry="21" fill="#fff" stroke="#111827" stroke-width="1.55"/>
+  <text x="545" y="739" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11.5">View Skill Recommendations</text>
+
+  <line x1="80" y1="655" x2="165" y2="535" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="665" x2="165" y2="585" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="675" x2="165" y2="635" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="685" x2="165" y2="685" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="695" x2="165" y2="735" stroke="#111827" stroke-width="1.3"/>
+  <line x1="80" y1="650" x2="450" y2="535" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="660" x2="430" y2="585" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="670" x2="430" y2="635" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="680" x2="440" y2="685" stroke="#111827" stroke-width="1.15"/>
+  <line x1="80" y1="690" x2="425" y2="735" stroke="#111827" stroke-width="1.15"/>
+</svg>

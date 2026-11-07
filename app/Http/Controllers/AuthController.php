@@ -1033,7 +1033,7 @@ class AuthController extends Controller
      */
     public function markNotificationRead($id)
     {
-            $notification = DB::table('notifications')
+        $notification = DB::table('notifications')
             ->where('notifiable_id', Auth::id())
             ->where('notifiable_type', User::class)
             ->where('id', $id)

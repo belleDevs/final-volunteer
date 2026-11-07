@@ -213,8 +213,8 @@
 
             @elseif($settingsPane === 'notifications')
                 <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
-                    <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Email preferences</h2>
-                    <p class="mt-1 text-sm text-slate-500">Choose which updates are emailed to <span class="font-medium text-slate-700 dark:text-slate-200">{{ $organization->email }}</span>. The in-app inbox still records every notice.</p>
+                    <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Notification preferences</h2>
+                    <p class="mt-1 text-sm text-slate-500">Choose which updates are emailed. Email goes to <span class="font-medium text-slate-700 dark:text-slate-200">{{ $organization->email }}</span>. The in-app inbox still records every update.</p>
 
                     <form action="{{ route('org.settings.notifications') }}" method="POST" class="mt-5 space-y-2.5">
                         @csrf
@@ -230,7 +230,6 @@
                                 </span>
                             </label>
                         @endforeach
-                        <p class="pt-1 text-xs text-slate-400">SMS notifications are not available.</p>
                         <div class="flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800">
                             <button type="submit" class="rounded-xl bg-jci-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-jci-dark">Save preferences</button>
                         </div>

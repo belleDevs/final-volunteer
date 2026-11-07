@@ -207,7 +207,6 @@ class User extends Authenticatable
 
         return !array_key_exists($key, $preferences) || (bool) $preferences[$key];
     }
-
     public function assignments()
     {
         return $this->hasMany(Assignment::class);

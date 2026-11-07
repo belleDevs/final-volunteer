@@ -630,17 +630,17 @@
     <!-- TAB: EVENTS -->
     <div class="{{ $activeTab === 'events' ? '' : 'hidden' }}">
         @include('admin.partials.events')
-    </div>
+        </div>
 
     <!-- TAB: TASKS -->
     <div class="{{ $activeTab === 'tasks' ? '' : 'hidden' }}">
         @include('admin.partials.tasks')
-    </div>
+        </div>
 
     <!-- TAB: VOLUNTEERS -->
     <div class="{{ $activeTab === 'volunteers' ? '' : 'hidden' }}">
         @include('admin.partials.volunteers')
-    </div>
+        </div>
 
     <!-- TAB 3: USER LISTS -->
     <div class="{{ $activeTab === 'users' ? '' : 'hidden' }} space-y-5">
@@ -933,11 +933,11 @@
                                     <x-ui.avatar :user="$log->user" size="sm" />
                                     <div class="min-w-0">
                                         <h6 class="truncate text-xs font-black text-slate-800">
-                                            {{ $log->user->name ?? 'Deleted volunteer' }}
-                                        </h6>
-                                        <p class="text-[10px] text-slate-400">
-                                            {{ $log->user->email ?? 'No account attached' }} &middot; {{ $log->created_at->format('M d, Y g:i A') }}
-                                        </p>
+                                        {{ $log->user->name ?? 'Deleted volunteer' }}
+                                    </h6>
+                                    <p class="text-[10px] text-slate-400">
+                                        {{ $log->user->email ?? 'No account attached' }} &middot; {{ $log->created_at->format('M d, Y g:i A') }}
+                                    </p>
                                     </div>
                                 </div>
                                 <div class="flex flex-wrap gap-1.5">
@@ -1004,15 +1004,15 @@
     <!-- TAB: NOTIFICATIONS -->
     <div class="{{ $activeTab === 'notifications' ? '' : 'hidden' }}">
         @include('admin.partials.notifications')
-    </div>
+        </div>
 
     <!-- TAB 4: SYSTEM NOTICES -->
     @if($activeTab === 'messages')
     <div class="space-y-4">
-        <div>
+                    <div>
             <h2 class="text-lg font-extrabold text-slate-900">Organization messages</h2>
             <p class="mt-1 text-sm text-slate-500">These conversations are between you and an organization. Volunteer chats stay on the organization account.</p>
-        </div>
+                    </div>
         <div class="grid min-h-[32rem] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[280px_minmax(0,1fr)]">
             <div class="border-b border-slate-100 lg:border-b-0 lg:border-r">
                 <div class="max-h-[32rem] overflow-y-auto">
@@ -1027,7 +1027,7 @@
                                     <span class="truncate text-sm font-semibold text-slate-800">{{ $organization->name }}</span>
                                     @if($organization->message_unread > 0)
                                         <span class="shrink-0 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-600">{{ $organization->message_unread }}</span>
-                                    @endif
+                                        @endif
                                 </span>
                                 <span class="mt-0.5 block truncate text-xs text-slate-400">{{ $organization->message_preview }}</span>
                             </span>
@@ -1046,8 +1046,8 @@
                         <div class="min-w-0">
                             <p class="truncate text-sm font-semibold text-slate-900">{{ $selectedMessageOrg->name }}</p>
                             <p class="text-[11px] text-slate-400">Organization · {{ ucfirst($selectedMessageOrg->status ?: 'active') }}</p>
-                        </div>
                     </div>
+                </div>
                     <div class="flex-1 space-y-3 overflow-y-auto px-4 py-4">
                         @forelse($platformMessages as $entry)
                             <div class="flex items-end gap-2 {{ $entry->from_admin ? 'justify-end' : 'justify-start' }}">
@@ -1057,15 +1057,15 @@
                                 <div class="max-w-[75%] rounded-2xl px-3 py-2 text-sm {{ $entry->from_admin ? 'bg-jci-blue text-white' : 'bg-slate-100 text-slate-700' }}">
                                     {{ $entry->body }}
                                     <span class="mt-1 block text-[10px] {{ $entry->from_admin ? 'text-right text-sky-100' : 'text-slate-400' }}">{{ \App\Support\ScheduleClock::stamp($entry->created_at) }}</span>
-                                </div>
+                    </div>
                                 @if($entry->from_admin)
                                     <x-ui.avatar :user="Auth::user()" size="sm" />
-                                @endif
-                            </div>
+                @endif
+            </div>
                         @empty
                             <p class="text-center text-sm text-slate-400">No messages yet. Send the first one below.</p>
                         @endforelse
-                    </div>
+        </div>
                     <form action="{{ route('admin.messages.store') }}" method="POST" class="flex items-center gap-2 border-t border-slate-100 p-3">
                         @csrf
                         <input type="hidden" name="organization_id" value="{{ $selectedMessageOrg->id }}">
@@ -1075,7 +1075,7 @@
                         </button>
                     </form>
                 @endif
-            </div>
+    </div>
         </div>
     </div>
     @endif
