@@ -2,12 +2,15 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement("ALTER TABLE tasks MODIFY status ENUM('pending', 'assigned', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending'");
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE tasks MODIFY status ENUM('pending', 'assigned', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending'");
+        }
 
         DB::table('tasks')
             ->whereIn('status', ['pending', 'in_progress'])
@@ -32,6 +35,8 @@ return new class extends Migration
     {
         DB::table('tasks')->where('status', 'assigned')->update(['status' => 'in_progress']);
 
-        DB::statement("ALTER TABLE tasks MODIFY status ENUM('pending', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending'");
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE tasks MODIFY status ENUM('pending', 'in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'pending'");
+        }
     }
 };
