@@ -263,6 +263,12 @@ class VolunteerNotice
 
     public static function mailIsReady(): bool
     {
+        if (config('mail.default') === 'gmail_api') {
+            return filled(config('services.google.gmail_client_id'))
+                && filled(config('services.google.gmail_client_secret'))
+                && filled(config('services.google.gmail_refresh_token'));
+        }
+
         if (config('mail.default') === 'resend') {
             return filled(config('services.resend.key'));
         }

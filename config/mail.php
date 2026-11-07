@@ -52,6 +52,10 @@ return [
             'transport' => 'resend',
         ],
 
+        'gmail_api' => [
+            'transport' => 'gmail_api',
+        ],
+
         'ses' => [
             'transport' => 'ses',
         ],
