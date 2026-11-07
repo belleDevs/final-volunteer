@@ -388,7 +388,7 @@ class AuthController extends Controller
         if (! RegistrationOtp::send($data['email'], $data['name'], $staged['code'], 'volunteer')) {
             RegistrationOtp::forget($staged['token']);
             throw ValidationException::withMessages([
-                'email' => 'We could not send a verification code to that email. Check the address and try again.',
+                'email' => 'Email verification is temporarily unavailable. Please try again later or contact the site administrator.',
             ]);
         }
 
@@ -445,7 +445,7 @@ class AuthController extends Controller
         if (! RegistrationOtp::send($data['email'], $data['name'], $staged['code'], 'organization')) {
             RegistrationOtp::forget($staged['token']);
             throw ValidationException::withMessages([
-                'email' => 'We could not send a verification code to that email. Check the address and try again.',
+                'email' => 'Email verification is temporarily unavailable. Please try again later or contact the site administrator.',
             ]);
         }
 

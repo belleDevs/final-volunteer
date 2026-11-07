@@ -95,29 +95,16 @@ class RegistrationOtp
     {
         $mail = new RegistrationOtpMail($name, $code, $type);
 
-        try {
-            if (VolunteerNotice::mailIsReady()) {
-                Mail::to($email)->send($mail);
-
-                return true;
-            }
-        } catch (\Throwable $exception) {
-            report($exception);
+        if (! VolunteerNotice::mailIsReady()) {
+            return false;
         }
 
         try {
-            RegisteredMailbox::send(
-                $email,
-                'Your VolunteerHub verification code',
-                $mail->render(),
-                (string) config('mail.from.address', 'noreply@volunteerhub.ph'),
-                'VolunteerHub'
-            );
+            Mail::to($email)->send($mail);
 
             return true;
         } catch (\Throwable $exception) {
             report($exception);
-
             return false;
         }
     }
