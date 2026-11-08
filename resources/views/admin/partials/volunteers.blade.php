@@ -1,7 +1,15 @@
 @php
     $selectedVolunteerOrg = (int) request('volunteer_org', 0);
     $selectedVolunteerOrganization = $organizations->firstWhere('id', $selectedVolunteerOrg);
-    $roster = $systemUsers->where('role', 'volunteer')->sortBy('name')->values();
+    $roster = $systemUsers->where('role', 'volunteer')
+        ->filter(fn ($volunteer) => $volunteer->status === 'approved'
+            && $volunteer->organizationApplications->contains(
+                fn ($application) => $application->status === 'approved'
+                    && $application->organization?->role === 'organization'
+                    && $application->organization?->status === 'approved'
+            ))
+        ->sortBy('name')
+        ->values();
     $joinedStatuses = ['approved', 'submitted', 'completed'];
     $rosterStats = $roster->map(function ($volunteer) use ($joinedStatuses) {
         $joined = $volunteer->assignments->whereIn('status', $joinedStatuses);
@@ -85,7 +93,7 @@
                 <div>
                     <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">Roster</p>
                     <h4 class="mt-1 text-xl font-extrabold tracking-tight">{{ number_format($roster->count()) }} {{ \Illuminate\Support\Str::plural('volunteer', $roster->count()) }}</h4>
-                    <p class="mt-1 text-sm text-white/75">Organization-approved memberships, event participation, completed work, and rewards.</p>
+                    <p class="mt-1 text-sm text-white/75">Volunteers appear here after an organization approves their membership.</p>
                 </div>
                 @if($selectedVolunteerOrganization)
                     <a href="{{ route('admin.dashboard', ['tab' => 'volunteers']) }}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold text-white hover:bg-white/25">
@@ -112,7 +120,7 @@
         <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Organizations</h4>
-                <p class="mt-0.5 text-xs text-slate-400">Filter the roster by organization, or browse everyone below.</p>
+                <p class="mt-0.5 text-xs text-slate-400">Filter approved members by organization.</p>
             </div>
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div class="flex flex-wrap gap-2">
@@ -157,7 +165,7 @@
     <div class="flex items-center justify-between gap-3">
         <div>
             <h4 class="text-sm font-semibold text-slate-900 dark:text-white">
-                {{ $selectedVolunteerOrganization ? $selectedVolunteerOrganization->name : 'All volunteers' }}
+                {{ $selectedVolunteerOrganization ? $selectedVolunteerOrganization->name : 'All approved members' }}
             </h4>
             <p class="mt-0.5 text-xs text-slate-400">{{ $displayRoster->count() }} {{ \Illuminate\Support\Str::plural('volunteer', $displayRoster->count()) }} in this view</p>
         </div>
@@ -168,7 +176,7 @@
             <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
                 <i class="fa-solid fa-user-group"></i>
             </span>
-            <p class="mt-3 text-sm text-slate-400">No volunteers in this view yet.</p>
+            <p class="mt-3 text-sm text-slate-400">No approved members in this view yet.</p>
         </div>
     @else
         <div class="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3" id="volunteer-roster">

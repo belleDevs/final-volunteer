@@ -107,11 +107,14 @@ class RoleDashboardsAndExportsTest extends TestCase
         $response = $this->actingAs($admin)->get(route('admin.dashboard', ['tab' => 'volunteers']));
         $response->assertOk()
             ->assertSee('Approved member')
-            ->assertSee('Not an organization member')
             ->assertSee('nextElementSibling.hidden = false', false);
 
         $html = $response->getContent();
         $this->assertSame(1, substr_count($html, 'data-member="active"'));
+        preg_match_all('/<article data-volunteer-card.*?<\/article>/s', $html, $rosterCards);
+        $this->assertCount(1, $rosterCards[0]);
+        $this->assertStringContainsString('Approved Member', $rosterCards[0][0]);
+        $this->assertStringNotContainsString('Not Yet Approved Member', $rosterCards[0][0]);
 
         $organizationRoster = $this->get(route('admin.dashboard', [
             'tab' => 'volunteers',
