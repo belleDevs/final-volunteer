@@ -12,6 +12,7 @@ use App\Models\TaskApplication;
 use App\Models\ChatbotResponse;
 use App\Models\OrgConversation;
 use App\Support\ActivityReport;
+use App\Support\AuditFiles;
 use App\Support\CertificatePdf;
 use App\Support\OrgNotifier;
 use App\Support\ScheduleClock;
@@ -74,7 +75,7 @@ class VolunteerController extends Controller
             'hours' => $assignments->where('status', 'completed')->sum('hours_logged'),
         ];
 
-        $now = Carbon::now();
+        $now = ScheduleClock::now();
         $section = (string) request()->query('section', 'dashboard');
         $sections = ['dashboard', 'events', 'tasks', 'availability', 'notifications', 'certificates', 'skills', 'messages', 'settings'];
         if ($section === 'chatbot') {
@@ -202,7 +203,7 @@ class VolunteerController extends Controller
         $nextEvent = $upcomingEvents->first(fn (Event $event) => ScheduleClock::phase($event->start_time, $event->end_time, $event->status) === 'upcoming')
             ?? $upcomingEvents->first();
         $certificatesThisYear = $certificates->filter(
-            fn (Certificate $certificate) => $certificate->issued_at && $certificate->issued_at->year === $now->year
+            fn (Certificate $certificate) => $certificate->issued_at && $certificate->issued_at->copy()->timezone(ScheduleClock::ZONE)->year === $now->year
         )->count();
 
         $noticesQuery = $volunteer->notifications()->latest();
@@ -1347,5 +1348,33 @@ class VolunteerController extends Controller
         AuditTrail::report($request, $format);
 
         return $format === 'pdf' ? ReportFiles::pdf($report) : ReportFiles::excel($report);
+    }
+
+    public function auditLogs(Request $request)
+    {
+        return view('audit.self', [
+            'audience' => 'volunteer',
+            'logs' => AuditTrail::filteredForUser($request, Auth::user())->paginate(15)->withQueryString(),
+        ]);
+    }
+
+    public function exportAudit(Request $request, string $format)
+    {
+        abort_unless(in_array($format, ['csv', 'xls', 'pdf'], true), 404);
+
+        $query = AuditTrail::filteredForUser($request, Auth::user());
+        AuditTrail::record([
+            'action' => 'Audit log exported',
+            'action_type' => 'other',
+            'module' => 'System',
+            'description' => 'Exported their filtered audit log as '.strtoupper($format).'.',
+            'new' => ['format' => $format],
+        ]);
+
+        return match ($format) {
+            'csv' => AuditFiles::csv($query),
+            'xls' => AuditFiles::excel($query),
+            default => AuditFiles::pdf($query),
+        };
     }
 }

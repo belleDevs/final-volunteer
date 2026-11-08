@@ -126,10 +126,12 @@ class ActivityReport
                 $query->whereHas('assignments', fn ($assignments) => $assignments->where('user_id', $user->id));
             })
             ->when(!$skipPeriod, function ($query) use ($start, $end) {
-                $query->where(function ($query) use ($start, $end) {
+                $createdStart = $start->copy()->utc();
+                $createdEnd = $end->copy()->utc();
+                $query->where(function ($query) use ($start, $end, $createdStart, $createdEnd) {
                     $query->where(function ($query) use ($start, $end) {
                         $query->where('start_time', '<=', $end)->where('end_time', '>=', $start);
-                    })->orWhereBetween('created_at', [$start, $end]);
+                    })->orWhereBetween('created_at', [$createdStart, $createdEnd]);
                 });
             })
             ->when($audience === 'admin' && $organizationId && !in_array($purpose, ['event', 'task'], true), fn ($query) => $query->where('organization_id', $organizationId))
@@ -478,7 +480,7 @@ class ActivityReport
     private static function period(Request $request): array
     {
         $rangeKey = (string) $request->query('range', 'year');
-        $now = Carbon::now();
+        $now = ScheduleClock::now();
 
         try {
             switch ($rangeKey) {
@@ -495,8 +497,8 @@ class ActivityReport
                     $end = $now->copy()->endOfMonth();
                     break;
                 case 'custom':
-                    $start = Carbon::parse($request->query('from', $now->copy()->startOfYear()->toDateString()))->startOfDay();
-                    $end = Carbon::parse($request->query('to', $now->toDateString()))->endOfDay();
+                    $start = Carbon::parse($request->query('from', $now->copy()->startOfYear()->toDateString()), ScheduleClock::ZONE)->startOfDay();
+                    $end = Carbon::parse($request->query('to', $now->toDateString()), ScheduleClock::ZONE)->endOfDay();
                     if ($end->lt($start)) {
                         [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
                     }
@@ -1000,7 +1002,7 @@ class ActivityReport
         return [
             'title' => $event->title,
             'organization' => $event->organization->name ?? 'Former organization',
-            'schedule' => $event->start_time->format('M j, Y').' – '.$event->end_time->format('M j, Y'),
+            'schedule' => ScheduleClock::range($event->start_time, $event->end_time),
             'status' => $event->oversightLabel(),
             'volunteers' => (string) $participants,
             'tasks' => $completedTasks.' of '.$event->tasks->count(),
@@ -1026,7 +1028,7 @@ class ActivityReport
             'event' => $task->event->title ?? 'Event',
             'organization' => $task->event->organization->name ?? 'Former organization',
             'status' => $status,
-            'deadline' => $task->due_date ? $task->due_date->format('M j, Y g:i A') : 'No deadline',
+            'deadline' => $task->due_date ? ScheduleClock::format($task->due_date) : 'No deadline',
             'volunteer' => $names !== '' ? $names : 'Unassigned',
         ];
     }
@@ -1095,13 +1097,17 @@ class ActivityReport
         $attendance = [];
         $signupCounts = [];
         $cursor = $start->copy()->startOfMonth();
-        $last = $end->copy()->min(Carbon::now()->endOfMonth());
+        $last = $end->copy()->min(ScheduleClock::now()->endOfMonth());
         $guard = 0;
 
         while ($cursor->lte($last) && $guard < 18) {
             $monthStart = $cursor->copy()->startOfMonth();
             $monthEnd = $cursor->copy()->endOfMonth();
-            $monthEvents = $events->filter(fn (Event $event) => $event->start_time && $event->start_time->between($monthStart, $monthEnd));
+            $monthEvents = $events->filter(function (Event $event) use ($monthStart, $monthEnd) {
+                $start = ScheduleClock::at($event->start_time);
+
+                return $start && $start->between($monthStart, $monthEnd);
+            });
             $labels[] = $cursor->format('M Y');
             $eventCounts[] = $monthEvents->count();
             $attendance[] = $monthEvents->flatMap(function (Event $event) use ($attendanceUserId, $attendanceTaskIds) {

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\RoleCatalog;
+use App\Support\ScheduleClock;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -107,8 +108,10 @@ class Task extends Model
 
     public function isOverdue(): bool
     {
-        return $this->due_date
-            && $this->due_date->isPast()
+        $dueAt = ScheduleClock::at($this->due_date);
+
+        return $dueAt
+            && $dueAt->lt(ScheduleClock::now())
             && !in_array($this->oversightStatus(), ['completed', 'cancelled'], true);
     }
 

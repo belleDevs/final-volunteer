@@ -190,6 +190,11 @@ class AuditTrail
         return $query;
     }
 
+    public static function filteredForUser(Request $request, User $user): Builder
+    {
+        return self::filtered($request)->where('user_id', $user->id);
+    }
+
     public static function localTime(Carbon $time): string
     {
         return $time->copy()

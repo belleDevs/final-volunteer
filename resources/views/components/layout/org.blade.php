@@ -15,6 +15,7 @@
         'certificates' => ['Certificates', 'Review evidence, then issue certificates'],
         'notifications' => ['Notifications', $orgUnreadCount > 0 ? $orgUnreadCount.' unread' : 'You are caught up'],
         'reports' => ['Reports', 'Activity for the selected period'],
+        'audit' => ['Audit Logs', 'Activity recorded for your account'],
         'settings' => ['Settings', 'Profile, security, notifications, and verification'],
     ];
     $orgHeading = $orgHeader[$active] ?? ['Organization', 'Workspace'];
@@ -29,6 +30,7 @@
         ['key' => 'certificates', 'label' => 'Certificates', 'icon' => 'fa-certificate', 'href' => route('org.dashboard', ['section' => 'certificates'])],
         ['key' => 'notifications', 'label' => 'Notifications', 'icon' => 'fa-bell', 'href' => route('org.dashboard', ['section' => 'notifications'])],
         ['key' => 'reports', 'label' => 'Reports', 'icon' => 'fa-chart-column', 'href' => route('org.reports')],
+        ['key' => 'audit', 'label' => 'Audit Logs', 'icon' => 'fa-clipboard-list', 'href' => route('org.audit')],
         ['key' => 'settings', 'label' => 'Settings', 'icon' => 'fa-gear', 'href' => route('org.dashboard', ['section' => 'settings'])],
     ];
 @endphp

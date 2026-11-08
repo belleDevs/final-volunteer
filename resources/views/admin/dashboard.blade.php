@@ -699,23 +699,23 @@
                                 if ($user->role === 'organization') {
                                     $linkedOrganizations = collect([$user->name]);
                                 } else {
-                                    if ($user->primaryOrganization) {
+                                    $linkedOrganizations = $user->organizationApplications
+                                        ->where('status', 'approved')
+                                        ->filter(fn ($application) => $application->organization?->status === 'approved')
+                                        ->map(fn ($application) => $application->organization->name);
+
+                                    $hasPrimaryMembershipApplication = $user->organizationApplications
+                                        ->contains(fn ($application) => (int) $application->organization_id === (int) $user->organization_id);
+                                    if ($user->primaryOrganization?->status === 'approved' && !$hasPrimaryMembershipApplication) {
                                         $linkedOrganizations->push($user->primaryOrganization->name);
                                     }
-
-                                    $assignmentOrgs = $user->assignments
-                                        ->map(fn($assignment) => $assignment->event?->organization?->name)
-                                        ->filter();
-                                    $applicationOrgs = $user->taskApplications
-                                        ->map(fn($application) => $application->event?->organization?->name)
-                                        ->filter();
-                                    $linkedOrganizations = $assignmentOrgs->merge($applicationOrgs)->unique()->values();
+                                    $linkedOrganizations = $linkedOrganizations->filter()->unique()->values();
                                 }
 
                                 $initials = collect(explode(' ', $user->name))->map(fn($part) => substr($part, 0, 1))->take(2)->join('');
                                 $searchText = strtolower(trim($user->name . ' ' . $user->email . ' ' . ($user->phone ?? '')));
                             @endphp
-                            <tr class="hover:bg-slate-50/70 transition" data-user-row data-role="{{ $user->role }}" data-search="{{ $searchText }}">
+                            <tr class="hover:bg-slate-50/70 transition" data-user-row data-role="{{ $user->role }}" data-search="{{ $searchText }}" data-org-links="{{ $linkedOrganizations->join('|') }}">
                                 <td class="px-5 py-3.5 align-middle">
                                     <div class="flex items-center gap-3 min-w-52">
                                         @if($user->profile_photo_path)

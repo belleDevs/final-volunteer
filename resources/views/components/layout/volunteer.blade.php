@@ -16,6 +16,8 @@
         'messages' => ['Messages', 'Assistant answers and organization replies'],
         'profile' => ['Profile', $navUser->name],
         'settings' => ['Settings', 'Account and preferences'],
+        'reports' => ['Reports', 'Your participation for the selected period'],
+        'audit' => ['Audit Logs', 'Activity recorded for your account'],
     ];
     $volHeading = $volHeader[$navActive] ?? ['Volunteer', 'Workspace'];
     $nav = [
@@ -29,6 +31,8 @@
         ['key' => 'messages', 'label' => 'Messages', 'icon' => 'fa-comments', 'href' => route('volunteer.dashboard', ['section' => 'messages'])],
         ['key' => 'profile', 'label' => 'Profile', 'icon' => 'fa-user', 'href' => route('profile.show')],
         ['key' => 'settings', 'label' => 'Settings', 'icon' => 'fa-gear', 'href' => route('volunteer.dashboard', ['section' => 'settings'])],
+        ['key' => 'reports', 'label' => 'Reports', 'icon' => 'fa-chart-column', 'href' => route('volunteer.reports')],
+        ['key' => 'audit', 'label' => 'Audit Logs', 'icon' => 'fa-clipboard-list', 'href' => route('volunteer.audit')],
     ];
 @endphp
 

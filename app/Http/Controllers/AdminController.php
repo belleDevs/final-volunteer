@@ -19,6 +19,7 @@ use App\Support\OrgNotifier;
 use App\Support\PortalNotifier;
 use App\Support\VolunteerNotice;
 use App\Support\ReportFiles;
+use App\Support\ScheduleClock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -33,14 +34,15 @@ class AdminController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $now = Carbon::now();
+        $now = Carbon::now('UTC');
+        $scheduleNow = ScheduleClock::now();
 
         $totalVolunteers = User::where('role', 'volunteer')
             ->where('status', 'approved')
             ->count();
 
         $activeEvents = Event::where('status', 'published')
-            ->where('end_time', '>=', $now)
+            ->where('end_time', '>=', $scheduleNow)
             ->count();
 
         $approvedOrgs = User::where('role', 'organization')->where('status', 'approved')->count();
@@ -58,8 +60,9 @@ class AdminController extends Controller
         $organizationMessageCount = PlatformMessage::count();
         $broadcastLogCount = RecordArchive::where('table_name', 'broadcasts')->count();
 
-        $monthStart = $now->copy()->startOfMonth();
-        $previousMonthEnd = $monthStart->copy()->subSecond();
+        $monthStart = $now->copy()->timezone(ScheduleClock::ZONE)->startOfMonth()->utc();
+        $scheduleMonthStart = $scheduleNow->copy()->startOfMonth();
+        $previousScheduleMonthEnd = $scheduleMonthStart->copy()->subSecond();
 
         $previousVolunteers = User::where('role', 'volunteer')
             ->where('status', 'approved')
@@ -70,8 +73,8 @@ class AdminController extends Controller
             ->where('created_at', '<', $monthStart)
             ->count();
         $previousEvents = Event::whereIn('status', ['published', 'completed'])
-            ->where('start_time', '<=', $previousMonthEnd)
-            ->where('end_time', '>=', $previousMonthEnd)
+            ->where('start_time', '<=', $previousScheduleMonthEnd)
+            ->where('end_time', '>=', $previousScheduleMonthEnd)
             ->count();
         $previousOpenTasks = Task::whereIn('status', ['pending', 'assigned', 'in_progress'])
             ->where('created_at', '<', $monthStart)
@@ -92,12 +95,12 @@ class AdminController extends Controller
             ->where('status', 'approved')
             ->where('created_at', '>=', $growthStart)
             ->get(['created_at'])
-            ->groupBy(fn ($user) => $user->created_at->format('Y-m'));
+            ->groupBy(fn ($user) => $user->created_at->copy()->timezone(ScheduleClock::ZONE)->format('Y-m'));
 
         $volunteerGrowthLabels = [];
         $volunteerGrowthValues = [];
         for ($i = 5; $i >= 0; $i--) {
-            $month = $monthStart->copy()->subMonths($i);
+            $month = $scheduleMonthStart->copy()->subMonths($i);
             $volunteerGrowthLabels[] = $month->format('M');
             $volunteerGrowthValues[] = $volunteerSignups->get($month->format('Y-m'), collect())->count();
         }
@@ -130,6 +133,7 @@ class AdminController extends Controller
             : DB::table('assignments')
                 ->join('events', 'events.id', '=', 'assignments.event_id')
                 ->whereIn('events.organization_id', $organizationIds)
+                ->whereIn('assignments.status', ['approved', 'submitted', 'completed'])
                 ->whereNull('assignments.deleted_at')
                 ->whereNull('events.deleted_at')
                 ->select('events.organization_id as org_id', 'assignments.user_id')
@@ -137,6 +141,7 @@ class AdminController extends Controller
                     DB::table('task_applications')
                         ->join('events', 'events.id', '=', 'task_applications.event_id')
                         ->whereIn('events.organization_id', $organizationIds)
+                        ->where('task_applications.status', 'approved')
                         ->whereNull('events.deleted_at')
                         ->select('events.organization_id as org_id', 'task_applications.user_id')
                 )
@@ -203,13 +208,17 @@ class AdminController extends Controller
         $dashboardMonthEvents = [];
         $dashboardMonthVolunteers = [];
         for ($i = 5; $i >= 0; $i--) {
-            $month = $monthStart->copy()->subMonths($i);
+            $month = $scheduleMonthStart->copy()->subMonths($i);
             $monthEnd = $month->copy()->endOfMonth();
-            $monthEvents = $postedEvents->filter(fn (Event $event) => $event->start_time && $event->start_time->between($month, $monthEnd));
+            $monthEvents = $postedEvents->filter(function (Event $event) use ($month, $monthEnd) {
+                $start = ScheduleClock::at($event->start_time);
+
+                return $start && $start->between($month, $monthEnd);
+            });
             $dashboardMonthLabels[] = $month->format('M');
             $dashboardMonthEvents[] = $monthEvents->count();
             $dashboardMonthVolunteers[] = $monthEvents
-                ->flatMap(fn (Event $event) => $event->tasks->flatMap(fn (Task $task) => $task->assignments->pluck('user_id')))
+                ->flatMap(fn (Event $event) => $event->tasks->flatMap(fn (Task $task) => $task->assignments->whereIn('status', ['approved', 'submitted', 'completed'])->pluck('user_id')))
                 ->unique()
                 ->count();
         }
@@ -234,6 +243,7 @@ class AdminController extends Controller
                 'volunteerRewards.task:id,title',
                 'volunteerRewards.organization:id,name',
                 'primaryOrganization',
+                'organizationApplications.organization:id,name,status',
                 'assignments.event.organization',
                 'assignments.task:id,title',
                 'taskApplications.event.organization',
@@ -923,7 +933,7 @@ class AdminController extends Controller
 
     public function exportAudit(Request $request, string $format)
     {
-        abort_unless(in_array($format, ['csv', 'pdf'], true), 404);
+        abort_unless(in_array($format, ['csv', 'xls', 'pdf'], true), 404);
 
         $query = AuditTrail::filtered($request);
 
@@ -941,7 +951,11 @@ class AdminController extends Controller
             ], fn ($value) => $value !== null && $value !== ''),
         ]);
 
-        return $format === 'csv' ? AuditFiles::csv($query) : AuditFiles::pdf($query);
+        return match ($format) {
+            'csv' => AuditFiles::csv($query),
+            'xls' => AuditFiles::excel($query),
+            default => AuditFiles::pdf($query),
+        };
     }
 
     private function notifyUser(int $userId, string $title, string $message, string $icon): void

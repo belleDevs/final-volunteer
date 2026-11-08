@@ -83,6 +83,7 @@
                         Filters{{ $activeFilterCount > 0 ? ' ('.$activeFilterCount.')' : '' }}
                     </button>
                     <a href="{{ route('admin.audit.export', ['format' => 'csv']) }}?{{ http_build_query(request()->except('page')) }}" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300">CSV</a>
+                    <a href="{{ route('admin.audit.export', ['format' => 'xls']) }}?{{ http_build_query(request()->except('page')) }}" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-emerald-500 hover:text-emerald-600 dark:border-slate-700 dark:text-slate-300">Excel</a>
                     <a href="{{ route('admin.audit.export', ['format' => 'pdf']) }}?{{ http_build_query(request()->except('page')) }}" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:text-slate-300">PDF</a>
                 </div>
         </div>

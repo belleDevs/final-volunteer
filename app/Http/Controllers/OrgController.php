@@ -19,6 +19,7 @@ use App\Models\VolunteerReward;
 use App\Models\RecordArchive;
 use App\Mail\TaskVolunteerInviteMail;
 use App\Support\ActivityReport;
+use App\Support\AuditFiles;
 use App\Support\CertificatePdf;
 use App\Support\OrgNotifier;
 use App\Support\OrgPreferences;
@@ -30,6 +31,7 @@ use App\Models\OrganizationNotice;
 use App\Support\RoleCatalog;
 use App\Support\VolunteerNotice;
 use App\Support\ReportFiles;
+use App\Support\ScheduleClock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -52,22 +54,17 @@ class OrgController extends Controller
 
         $organization = Auth::user();
         $orgId = $organization->id;
-        $now = Carbon::now();
+        $now = ScheduleClock::now();
 
         $myEventsCount = Event::where('organization_id', $orgId)->count();
 
         // Count unique volunteers assigned to tasks/events of this organization
         $eventIds = Event::where('organization_id', $orgId)->pluck('id')->toArray();
         $assignedVolunteersCount = Assignment::whereIn('event_id', $eventIds)
-            ->whereHas('user')
+            ->whereIn('status', ['approved', 'submitted', 'completed'])
+            ->whereHas('user', fn ($query) => $query->where('role', 'volunteer')->where('status', 'approved'))
             ->distinct('user_id')
             ->count('user_id');
-
-        $linkedVolunteerIds = collect($eventIds === [] ? [] : Assignment::whereIn('event_id', $eventIds)->pluck('user_id'))
-            ->merge($eventIds === [] ? [] : TaskApplication::whereIn('event_id', $eventIds)->pluck('user_id'))
-            ->filter()
-            ->unique()
-            ->values();
 
         $organizationVolunteers = User::where('role', 'volunteer')
             ->where('organization_id', $orgId)
@@ -196,7 +193,8 @@ class OrgController extends Controller
         }
 
         $eventsThisWeek = $activeEvents->filter(function ($event) use ($now) {
-            return $event->created_at && $event->created_at->gte($now->copy()->startOfWeek());
+            return $event->created_at
+                && $event->created_at->between($now->copy()->startOfWeek()->utc(), $now->copy()->utc());
         })->count();
 
         $pendingAssignmentsCount = Assignment::whereIn('event_id', $eventIds)
@@ -213,11 +211,11 @@ class OrgController extends Controller
         $certificateQuery = Certificate::whereIn('event_id', $eventIds);
         $certificatesCount = (clone $certificateQuery)->count();
         $certificatesThisMonth = (clone $certificateQuery)
-            ->where('issued_at', '>=', $now->copy()->startOfMonth())
+            ->where('issued_at', '>=', $now->copy()->startOfMonth()->utc())
             ->count();
 
         $upcomingEvents = $activeEvents
-            ->filter(fn ($event) => $event->end_time && $event->end_time->gte($now))
+            ->filter(fn ($event) => ScheduleClock::at($event->end_time)?->gte($now))
             ->sortBy('start_time')
             ->values();
 
@@ -257,8 +255,7 @@ class OrgController extends Controller
         $dashboardUpcoming = $events
             ->filter(function (Event $event) use ($now) {
                 return !in_array($event->status, ['completed', 'cancelled'], true)
-                    && $event->end_time
-                    && $event->end_time->gte($now);
+                    && ScheduleClock::at($event->end_time)?->gte($now);
             })
             ->sortBy('start_time')
             ->take(4)
@@ -368,29 +365,35 @@ class OrgController extends Controller
         foreach ($dashboardTasks->filter(fn (Task $task) => $task->isOverdue())->take(3) as $overdueTask) {
             $reminders->push([
                 'title' => 'Overdue task',
-                'detail' => $overdueTask->title.' was due '.$overdueTask->due_date->format('M d, Y g:i A').'.',
-                'when' => $overdueTask->due_date->diffForHumans(),
+                'detail' => $overdueTask->title.' was due '.ScheduleClock::format($overdueTask->due_date).'.',
+                'when' => ScheduleClock::at($overdueTask->due_date)?->diffForHumans($now),
                 'tone' => 'rose',
             ]);
         }
         foreach ($dashboardTasks->filter(function (Task $task) use ($now) {
-            return $task->due_date
-                && $task->due_date->isFuture()
-                && $task->due_date->lte($now->copy()->addDays(3))
+            $dueAt = ScheduleClock::at($task->due_date);
+
+            return $dueAt
+                && $dueAt->gt($now)
+                && $dueAt->lte($now->copy()->addDays(3))
                 && !in_array($task->status, ['completed', 'cancelled'], true);
         })->take(3) as $dueSoon) {
             $reminders->push([
                 'title' => 'Task deadline approaching',
-                'detail' => $dueSoon->title.' is due '.$dueSoon->due_date->format('M d, Y g:i A').'.',
-                'when' => $dueSoon->due_date->diffForHumans(),
+                'detail' => $dueSoon->title.' is due '.ScheduleClock::format($dueSoon->due_date).'.',
+                'when' => ScheduleClock::at($dueSoon->due_date)?->diffForHumans($now),
                 'tone' => 'amber',
             ]);
         }
-        foreach ($dashboardUpcoming->filter(fn (Event $event) => $event->start_time && $event->start_time->isFuture() && $event->start_time->lte($now->copy()->addDays(7))) as $soonEvent) {
+        foreach ($dashboardUpcoming->filter(function (Event $event) use ($now) {
+            $startAt = ScheduleClock::at($event->start_time);
+
+            return $startAt && $startAt->gt($now) && $startAt->lte($now->copy()->addDays(7));
+        }) as $soonEvent) {
             $reminders->push([
                 'title' => 'Upcoming event',
-                'detail' => $soonEvent->title.' starts '.$soonEvent->start_time->format('M d, Y g:i A').'.',
-                'when' => $soonEvent->start_time->diffForHumans(),
+                'detail' => $soonEvent->title.' starts '.ScheduleClock::format($soonEvent->start_time).'.',
+                'when' => ScheduleClock::at($soonEvent->start_time)?->diffForHumans($now),
                 'tone' => 'blue',
             ]);
         }
@@ -2697,3 +2700,31 @@ class OrgController extends Controller
         return $format === 'pdf' ? ReportFiles::pdf($report) : ReportFiles::excel($report);
     }
 }
+
+    public function auditLogs(Request $request)
+    {
+        return view('audit.self', [
+            'audience' => 'organization',
+            'logs' => AuditTrail::filteredForUser($request, Auth::user())->paginate(15)->withQueryString(),
+        ]);
+    }
+
+    public function exportAudit(Request $request, string $format)
+    {
+        abort_unless(in_array($format, ['csv', 'xls', 'pdf'], true), 404);
+
+        $query = AuditTrail::filteredForUser($request, Auth::user());
+        AuditTrail::record([
+            'action' => 'Audit log exported',
+            'action_type' => 'other',
+            'module' => 'System',
+            'description' => 'Exported their filtered audit log as '.strtoupper($format).'.',
+            'new' => ['format' => $format],
+        ]);
+
+        return match ($format) {
+            'csv' => AuditFiles::csv($query),
+            'xls' => AuditFiles::excel($query),
+            default => AuditFiles::pdf($query),
+        };
+    }

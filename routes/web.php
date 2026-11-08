@@ -128,6 +128,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/export/{format}', [OrgController::class, 'exportReport'])->name('org.reports.export');
     });
 
+        Route::get('/audit-logs', [OrgController::class, 'auditLogs'])->name('org.audit');
+        Route::get('/audit-logs/export/{format}', [OrgController::class, 'exportAudit'])->name('org.audit.export');
     // Volunteer Group
     Route::prefix('volunteer')->middleware('role:volunteer')->group(function () {
         Route::get('/dashboard', [VolunteerController::class, 'dashboard'])->name('volunteer.dashboard');
@@ -148,3 +150,5 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/reports/export/{format}', [VolunteerController::class, 'exportReport'])->name('volunteer.reports.export');
     });
 });
+        Route::get('/audit-logs', [VolunteerController::class, 'auditLogs'])->name('volunteer.audit');
+        Route::get('/audit-logs/export/{format}', [VolunteerController::class, 'exportAudit'])->name('volunteer.audit.export');

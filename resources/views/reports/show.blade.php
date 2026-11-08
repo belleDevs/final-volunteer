@@ -7,7 +7,7 @@
         @include('reports.body')
     </x-layout.org>
 @else
-    <x-layout.volunteer>
+    <x-layout.volunteer active="reports">
         <div class="lg:col-span-12">
             @include('reports.body')
         </div>
