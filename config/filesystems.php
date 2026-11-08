@@ -1,5 +1,10 @@
 <?php
 
+$publicStoragePath = env(
+    'PUBLIC_STORAGE_PATH',
+    env('RAILWAY_VOLUME_MOUNT_PATH', storage_path('app/public'))
+);
+
 return [
 
     /*
@@ -38,7 +43,7 @@ return [
 
         'public' => [
             'driver' => 'local',
-            'root' => storage_path('app/public'),
+            'root' => $publicStoragePath,
             'url' => env('APP_URL').'/storage',
             'visibility' => 'public',
             'throw' => false,
@@ -70,7 +75,7 @@ return [
     */
 
     'links' => [
-        public_path('storage') => storage_path('app/public'),
+        public_path('storage') => $publicStoragePath,
     ],
 
 ];

@@ -42,7 +42,7 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             @foreach([
-                ['key' => 'volunteers', 'label' => 'Approved Volunteers', 'value' => $totalVolunteers, 'icon' => 'fa-users', 'iconBg' => 'bg-blue-50', 'iconColor' => 'text-jci-blue'],
+                ['key' => 'volunteers', 'label' => 'Organization-Approved Volunteers', 'value' => $totalVolunteers, 'icon' => 'fa-users', 'iconBg' => 'bg-blue-50', 'iconColor' => 'text-jci-blue'],
                 ['key' => 'events', 'label' => 'Current Events', 'value' => $activeEvents, 'icon' => 'fa-calendar-check', 'iconBg' => 'bg-emerald-50', 'iconColor' => 'text-emerald-600'],
                 ['key' => 'orgs', 'label' => 'Approved Orgs', 'value' => $approvedOrgs, 'icon' => 'fa-building', 'iconBg' => 'bg-purple-50', 'iconColor' => 'text-purple-600'],
                 ['key' => 'tasks', 'label' => 'Current Open Tasks', 'value' => $openTasks, 'icon' => 'fa-list-check', 'iconBg' => 'bg-amber-50', 'iconColor' => 'text-amber-600'],
@@ -69,8 +69,8 @@
             <div class="xl:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-6">
                 <div class="flex items-start justify-between gap-3 mb-4">
                     <div>
-                        <h4 class="font-extrabold text-slate-900">Volunteer Growth</h4>
-                        <p class="text-xs text-slate-400 mt-0.5">Approved signups over the last 6 months</p>
+                        <h4 class="font-extrabold text-slate-900">Volunteer Membership Approvals</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Organization-approved memberships over the last 6 months</p>
                     </div>
                     @if($volunteerGrowthTrend)
                         <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 {{ $volunteerGrowthTrend['direction'] === 'up' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600' }}">
@@ -507,19 +507,12 @@
                                 $typeLabel = $org->organizationTypeLabel();
                                 $location = $organizationLocations[$org->id] ?? null;
                                 $volunteerCount = $organizationVolunteerCounts[$org->id] ?? 0;
-                                $initials = collect(explode(' ', $org->name))->map(fn($part) => substr($part, 0, 1))->take(2)->join('');
                                 $searchText = strtolower(trim($org->name . ' ' . $org->email . ' ' . ($typeLabel ?? '') . ' ' . ($location ?? '')));
                             @endphp
                             <tr class="hover:bg-slate-50/70 transition" data-org-row data-search="{{ $searchText }}">
                                 <td class="px-5 py-3.5">
                                     <div class="flex items-center gap-3 min-w-56">
-                                        @if($org->profile_photo_path)
-                                            <img src="{{ asset('storage/' . $org->profile_photo_path) }}" alt="{{ $org->name }}" class="h-9 w-9 rounded-full object-cover shrink-0">
-                                        @else
-                                            <span class="h-9 w-9 rounded-full bg-jci-blue text-white flex items-center justify-center text-[11px] font-bold shrink-0">
-                                                {{ strtoupper($initials) }}
-                                            </span>
-                                        @endif
+                                        <x-ui.avatar :user="$org" size="sm" class="bg-jci-blue text-white" />
                                         <div class="min-w-0">
                                             <div class="font-bold text-slate-800 truncate">{{ $org->name }}</div>
                                             <div class="text-xs text-slate-400 truncate flex items-center gap-1">
@@ -647,7 +640,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             @foreach([
                 ['label' => 'Total Users', 'value' => $systemUsers->count(), 'icon' => 'fa-users', 'iconBg' => 'bg-blue-50', 'iconColor' => 'text-jci-blue'],
-                ['label' => 'Volunteers', 'value' => $systemUsers->where('role', 'volunteer')->count(), 'icon' => 'fa-user', 'iconBg' => 'bg-sky-50', 'iconColor' => 'text-sky-600'],
+                ['label' => 'Volunteer accounts', 'value' => $systemUsers->where('role', 'volunteer')->count(), 'icon' => 'fa-user', 'iconBg' => 'bg-sky-50', 'iconColor' => 'text-sky-600'],
                 ['label' => 'Organizations', 'value' => $systemUsers->where('role', 'organization')->count(), 'icon' => 'fa-building', 'iconBg' => 'bg-violet-50', 'iconColor' => 'text-violet-600'],
                 ['label' => 'Approved Accounts', 'value' => $systemUsers->where('status', 'approved')->count(), 'icon' => 'fa-circle-check', 'iconBg' => 'bg-emerald-50', 'iconColor' => 'text-emerald-600'],
             ] as $card)
@@ -701,30 +694,31 @@
                                 } else {
                                     $linkedOrganizations = $user->organizationApplications
                                         ->where('status', 'approved')
-                                        ->filter(fn ($application) => $application->organization?->status === 'approved')
+                                        ->filter(fn ($application) => $application->organization?->role === 'organization'
+                                            && $application->organization?->status === 'approved')
                                         ->map(fn ($application) => $application->organization->name);
-
-                                    $hasPrimaryMembershipApplication = $user->organizationApplications
-                                        ->contains(fn ($application) => (int) $application->organization_id === (int) $user->organization_id);
-                                    if ($user->primaryOrganization?->status === 'approved' && !$hasPrimaryMembershipApplication) {
-                                        $linkedOrganizations->push($user->primaryOrganization->name);
-                                    }
                                     $linkedOrganizations = $linkedOrganizations->filter()->unique()->values();
                                 }
 
-                                $initials = collect(explode(' ', $user->name))->map(fn($part) => substr($part, 0, 1))->take(2)->join('');
+                                $approvedMembership = $user->organizationApplications->contains(
+                                    fn ($application) => $application->status === 'approved'
+                                        && $application->organization?->role === 'organization'
+                                        && $application->organization?->status === 'approved'
+                                );
+                                $pendingMembership = $user->organizationApplications->contains(
+                                    fn ($application) => in_array($application->status, ['pending', 'interview_scheduled'], true)
+                                        && $application->organization?->role === 'organization'
+                                        && $application->organization?->status === 'approved'
+                                );
+                                $statusLabel = $user->role === 'volunteer' && $user->status === 'approved'
+                                    ? ($approvedMembership ? 'Approved member' : ($pendingMembership ? 'Pending organization review' : 'Not an organization member'))
+                                    : ucfirst((string) $user->status);
                                 $searchText = strtolower(trim($user->name . ' ' . $user->email . ' ' . ($user->phone ?? '')));
                             @endphp
                             <tr class="hover:bg-slate-50/70 transition" data-user-row data-role="{{ $user->role }}" data-search="{{ $searchText }}" data-org-links="{{ $linkedOrganizations->join('|') }}">
                                 <td class="px-5 py-3.5 align-middle">
                                     <div class="flex items-center gap-3 min-w-52">
-                                        @if($user->profile_photo_path)
-                                            <img src="{{ asset('storage/' . $user->profile_photo_path) }}" alt="{{ $user->name }}" class="h-9 w-9 rounded-full object-cover shrink-0">
-                                        @else
-                                            <span class="h-9 w-9 rounded-full bg-jci-blue text-white flex items-center justify-center text-[11px] font-bold shrink-0">
-                                                {{ strtoupper($initials) }}
-                                            </span>
-                                        @endif
+                                        <x-ui.avatar :user="$user" size="sm" class="bg-jci-blue text-white" />
                                         <div class="min-w-0">
                                             <div class="font-bold text-slate-800 truncate">{{ $user->name }}</div>
                                             <div class="text-xs text-slate-400 truncate">{{ $user->email }}</div>
@@ -736,7 +730,7 @@
                                 </td>
                                 <td class="px-4 py-3.5 align-middle text-slate-600 capitalize whitespace-nowrap">{{ $user->role }}</td>
                                 <td class="px-4 py-3.5 align-middle">
-                                    <x-ui.status-badge :label="ucfirst((string) $user->status)" />
+                                    <x-ui.status-badge :label="$statusLabel" />
                                 </td>
                                 <td class="px-4 py-3.5 align-middle text-slate-500 whitespace-nowrap text-xs">
                                     {{ $user->created_at?->format('M d, Y') ?? '—' }}

@@ -37,9 +37,19 @@ class AdminController extends Controller
         $now = Carbon::now('UTC');
         $scheduleNow = ScheduleClock::now();
 
-        $totalVolunteers = User::where('role', 'volunteer')
-            ->where('status', 'approved')
-            ->count();
+        $approvedMemberships = DB::table('organization_applications')
+            ->join('users as volunteers', 'volunteers.id', '=', 'organization_applications.user_id')
+            ->join('users as organizations', 'organizations.id', '=', 'organization_applications.organization_id')
+            ->where('organization_applications.status', 'approved')
+            ->where('volunteers.role', 'volunteer')
+            ->where('volunteers.status', 'approved')
+            ->whereNull('volunteers.deleted_at')
+            ->where('organizations.role', 'organization')
+            ->where('organizations.status', 'approved')
+            ->whereNull('organizations.deleted_at');
+        $totalVolunteers = (clone $approvedMemberships)
+            ->distinct()
+            ->count('organization_applications.user_id');
 
         $activeEvents = Event::where('status', 'published')
             ->where('end_time', '>=', $scheduleNow)
@@ -64,10 +74,6 @@ class AdminController extends Controller
         $scheduleMonthStart = $scheduleNow->copy()->startOfMonth();
         $previousScheduleMonthEnd = $scheduleMonthStart->copy()->subSecond();
 
-        $previousVolunteers = User::where('role', 'volunteer')
-            ->where('status', 'approved')
-            ->where('created_at', '<', $monthStart)
-            ->count();
         $previousOrgs = User::where('role', 'organization')
             ->where('status', 'approved')
             ->where('created_at', '<', $monthStart)
@@ -84,25 +90,31 @@ class AdminController extends Controller
             ->count();
 
         $metricTrends = [
-            'volunteers' => $this->monthOverMonthTrend($totalVolunteers, $previousVolunteers),
+            'volunteers' => null,
             'events' => $this->monthOverMonthTrend($activeEvents, $previousEvents),
             'orgs' => $this->monthOverMonthTrend($approvedOrgs, $previousOrgs),
             'tasks' => $this->monthOverMonthTrend($openTasks, $previousOpenTasks),
         ];
 
         $growthStart = $monthStart->copy()->subMonths(5);
-        $volunteerSignups = User::where('role', 'volunteer')
-            ->where('status', 'approved')
-            ->where('created_at', '>=', $growthStart)
-            ->get(['created_at'])
-            ->groupBy(fn ($user) => $user->created_at->copy()->timezone(ScheduleClock::ZONE)->format('Y-m'));
+        $volunteerMembershipApprovals = (clone $approvedMemberships)
+            ->whereNotNull('organization_applications.reviewed_at')
+            ->where('organization_applications.reviewed_at', '>=', $growthStart)
+            ->get(['organization_applications.user_id', 'organization_applications.reviewed_at'])
+            ->groupBy(fn ($application) => Carbon::parse($application->reviewed_at)
+                ->timezone(ScheduleClock::ZONE)
+                ->format('Y-m'));
 
         $volunteerGrowthLabels = [];
         $volunteerGrowthValues = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = $scheduleMonthStart->copy()->subMonths($i);
             $volunteerGrowthLabels[] = $month->format('M');
-            $volunteerGrowthValues[] = $volunteerSignups->get($month->format('Y-m'), collect())->count();
+            $volunteerGrowthValues[] = $volunteerMembershipApprovals
+                ->get($month->format('Y-m'), collect())
+                ->pluck('user_id')
+                ->unique()
+                ->count();
         }
 
         $volunteerGrowthTrend = $this->monthOverMonthTrend(
@@ -130,28 +142,14 @@ class AdminController extends Controller
                 ->pluck('location', 'organization_id');
         $organizationVolunteerCounts = $organizationIds->isEmpty()
             ? collect()
-            : DB::table('assignments')
-                ->join('events', 'events.id', '=', 'assignments.event_id')
-                ->whereIn('events.organization_id', $organizationIds)
-                ->whereIn('assignments.status', ['approved', 'submitted', 'completed'])
-                ->whereNull('assignments.deleted_at')
-                ->whereNull('events.deleted_at')
-                ->select('events.organization_id as org_id', 'assignments.user_id')
-                ->union(
-                    DB::table('task_applications')
-                        ->join('events', 'events.id', '=', 'task_applications.event_id')
-                        ->whereIn('events.organization_id', $organizationIds)
-                        ->where('task_applications.status', 'approved')
-                        ->whereNull('events.deleted_at')
-                        ->select('events.organization_id as org_id', 'task_applications.user_id')
-                )
-                ->union(
-                    DB::table('users')
-                        ->whereIn('organization_id', $organizationIds)
-                        ->where('role', 'volunteer')
-                        ->whereNull('deleted_at')
-                        ->select('organization_id as org_id', 'id as user_id')
-                )
+            : DB::table('organization_applications')
+                ->join('users as volunteers', 'volunteers.id', '=', 'organization_applications.user_id')
+                ->whereIn('organization_applications.organization_id', $organizationIds)
+                ->where('organization_applications.status', 'approved')
+                ->where('volunteers.role', 'volunteer')
+                ->where('volunteers.status', 'approved')
+                ->whereNull('volunteers.deleted_at')
+                ->select('organization_applications.organization_id as org_id', 'organization_applications.user_id')
                 ->get()
                 ->groupBy(fn ($row) => (int) $row->org_id)
                 ->map(fn ($rows) => $rows->pluck('user_id')->unique()->count());
@@ -243,7 +241,7 @@ class AdminController extends Controller
                 'volunteerRewards.task:id,title',
                 'volunteerRewards.organization:id,name',
                 'primaryOrganization',
-                'organizationApplications.organization:id,name,status',
+                'organizationApplications.organization:id,name,status,role',
                 'assignments.event.organization',
                 'assignments.task:id,title',
                 'taskApplications.event.organization',

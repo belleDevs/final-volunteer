@@ -117,6 +117,16 @@ npm run dev
 
 Now open your browser and navigate to `http://127.0.0.1:8000`.
 
+### Railway uploaded-file storage
+
+Railway's container filesystem is temporary. To keep profile photos, event photos, officer photos, and completion evidence between deployments:
+
+1. In the Railway service, add a Volume mounted at `/app/storage/app/public`.
+2. Deploy the application. The startup command recreates Laravel's `public/storage` link to that mounted directory.
+3. If previously uploaded files are missing, restore them from a backup or upload them again; the volume cannot recover files already removed from a previous container.
+
+The public filesystem disk uses Railway's `RAILWAY_VOLUME_MOUNT_PATH` when available. `PUBLIC_STORAGE_PATH` can override it for a different mount location.
+
 ---
 
 ## 🔑 Default Test User Credentials

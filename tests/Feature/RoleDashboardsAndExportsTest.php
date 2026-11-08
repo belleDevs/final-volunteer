@@ -34,6 +34,12 @@ class RoleDashboardsAndExportsTest extends TestCase
             'name' => 'Volunteer With Memberships',
             'organization_id' => $approvedOrganization->id,
         ]);
+        $unapprovedVolunteer = User::factory()->create([
+            'role' => 'volunteer',
+            'status' => 'approved',
+            'name' => 'Volunteer Without Approved Membership',
+            'organization_id' => $approvedOrganization->id,
+        ]);
 
         OrganizationApplication::create([
             'user_id' => $volunteer->id,
@@ -45,6 +51,11 @@ class RoleDashboardsAndExportsTest extends TestCase
             'organization_id' => $pendingOrganization->id,
             'status' => 'pending',
         ]);
+        OrganizationApplication::create([
+            'user_id' => $unapprovedVolunteer->id,
+            'organization_id' => $approvedOrganization->id,
+            'status' => 'pending',
+        ]);
 
         $response = $this->actingAs($admin)->get(route('admin.dashboard', ['tab' => 'users']));
         $response->assertOk();
@@ -52,6 +63,68 @@ class RoleDashboardsAndExportsTest extends TestCase
         $this->assertMatchesRegularExpression(
             '/<tr[^>]*data-role="volunteer"[^>]*data-search="[^"]*'.preg_quote(strtolower($volunteer->email), '/').'[^"]*"[^>]*data-org-links="Accepted Community Group"/',
             $response->getContent()
+        );
+        $response->assertSee('Approved member')
+            ->assertSee('Pending organization review');
+        $this->assertMatchesRegularExpression(
+            '/<tr[^>]*data-role="volunteer"[^>]*data-search="[^"]*'.preg_quote(strtolower($unapprovedVolunteer->email), '/').'[^"]*"[^>]*data-org-links=""/',
+            $response->getContent()
+        );
+    }
+
+    public function test_admin_roster_only_counts_organization_approved_members_and_handles_missing_photos(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'approved']);
+        $organization = User::factory()->create([
+            'role' => 'organization',
+            'status' => 'approved',
+            'name' => 'Approved Membership Organization',
+        ]);
+        $approvedMember = User::factory()->create([
+            'role' => 'volunteer',
+            'status' => 'approved',
+            'name' => 'Approved Member',
+            'profile_photo_path' => 'profile-photos/missing/photo.jpg',
+        ]);
+        $unapprovedMember = User::factory()->create([
+            'role' => 'volunteer',
+            'status' => 'approved',
+            'name' => 'Not Yet Approved Member',
+            'organization_id' => $organization->id,
+        ]);
+
+        OrganizationApplication::create([
+            'user_id' => $approvedMember->id,
+            'organization_id' => $organization->id,
+            'status' => 'approved',
+        ]);
+        OrganizationApplication::create([
+            'user_id' => $unapprovedMember->id,
+            'organization_id' => $organization->id,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('admin.dashboard', ['tab' => 'volunteers']));
+        $response->assertOk()
+            ->assertSee('Approved member')
+            ->assertSee('Not an organization member')
+            ->assertSee('nextElementSibling.hidden = false', false);
+
+        $html = $response->getContent();
+        $this->assertSame(1, substr_count($html, 'data-member="active"'));
+
+        $organizationRoster = $this->get(route('admin.dashboard', [
+            'tab' => 'volunteers',
+            'volunteer_org' => $organization->id,
+        ]));
+        $organizationRoster->assertOk()->assertSee('Approved Member');
+        $this->assertSame(1, substr_count($organizationRoster->getContent(), '<article data-volunteer-card'));
+
+        $dashboard = $this->get(route('admin.dashboard'));
+        $dashboard->assertOk();
+        $this->assertMatchesRegularExpression(
+            '/<p class="mt-5 text-3xl font-black text-slate-900 tracking-tight">1<\/p>\s*<p class="mt-1 text-sm text-slate-400 font-medium">Organization-Approved Volunteers<\/p>/',
+            $dashboard->getContent()
         );
     }
 

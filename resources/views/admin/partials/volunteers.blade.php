@@ -6,16 +6,19 @@
     $rosterStats = $roster->map(function ($volunteer) use ($joinedStatuses) {
         $joined = $volunteer->assignments->whereIn('status', $joinedStatuses);
         $completed = $volunteer->assignments->where('status', 'completed');
+        $approvedMemberships = $volunteer->organizationApplications->filter(
+            fn ($application) => $application->status === 'approved'
+                && $application->organization?->role === 'organization'
+                && $application->organization?->status === 'approved'
+        );
         $member = $volunteer->status !== 'approved'
             ? $volunteer->status
-            : ($volunteer->availability === 'inactive' ? 'inactive' : 'active');
-        $orgIds = collect([$volunteer->organization_id])
-            ->merge($volunteer->assignments->map(fn ($assignment) => $assignment->event?->organization_id))
-            ->merge($volunteer->taskApplications->map(fn ($application) => $application->event?->organization_id))
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+            : ($approvedMemberships->isEmpty()
+                ? 'not_member'
+                : ($volunteer->availability === 'inactive' ? 'inactive' : 'active'));
+        $orgIds = $volunteer->status === 'approved'
+            ? $approvedMemberships->pluck('organization_id')->map(fn ($id) => (int) $id)->unique()->values()
+            : collect();
 
         return [
             'volunteer' => $volunteer,
@@ -59,6 +62,7 @@
             'inactive' => 'Inactive',
             'pending' => 'Pending',
             'rejected' => 'Rejected',
+            'not_member' => 'Not an organization member',
             default => 'Active',
         };
         $row['searchText'] = strtolower(trim($volunteer->name.' '.$volunteer->email.' '.$volunteer->skills->pluck('name')->join(' ').$row['scopeLabel']));
@@ -81,7 +85,7 @@
                 <div>
                     <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">Roster</p>
                     <h4 class="mt-1 text-xl font-extrabold tracking-tight">{{ number_format($roster->count()) }} {{ \Illuminate\Support\Str::plural('volunteer', $roster->count()) }}</h4>
-                    <p class="mt-1 text-sm text-white/75">Membership, event participation, completed work, and rewards.</p>
+                    <p class="mt-1 text-sm text-white/75">Organization-approved memberships, event participation, completed work, and rewards.</p>
                 </div>
                 @if($selectedVolunteerOrganization)
                     <a href="{{ route('admin.dashboard', ['tab' => 'volunteers']) }}" class="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold text-white hover:bg-white/25">
@@ -128,16 +132,11 @@
                 @php
                     $linked = $rosterStats->filter(fn ($row) => $row['orgIds']->contains((int) $org->id));
                     $isSelected = (int) $selectedVolunteerOrg === (int) $org->id;
-                    $orgInitials = collect(explode(' ', $org->name))->map(fn ($part) => substr($part, 0, 1))->take(2)->join('');
                 @endphp
                 <a href="{{ route('admin.dashboard', ['tab' => 'volunteers', 'volunteer_org' => $org->id]) }}"
                    class="flex min-h-[6.5rem] flex-col rounded-2xl border px-4 py-4 transition {{ $isSelected ? 'border-jci-blue bg-sky-50 shadow-sm dark:bg-sky-950/30' : 'border-slate-200 hover:border-sky-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800' }}">
                     <div class="flex items-start gap-3">
-                        @if($org->profile_photo_path)
-                            <img src="{{ asset('storage/'.$org->profile_photo_path) }}" alt="" class="h-10 w-10 rounded-xl object-cover">
-                        @else
-                            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-jci-blue text-xs font-bold text-white">{{ strtoupper($orgInitials) }}</span>
-                        @endif
+                        <x-ui.avatar :user="$org" size="lg" class="rounded-xl bg-jci-blue text-white" />
                         <div class="min-w-0 flex-1">
                             <p class="truncate font-bold text-slate-800 dark:text-slate-100">{{ $org->name }}</p>
                             <p class="mt-0.5 truncate text-[11px] text-slate-400">{{ $org->organizationTypeLabel() ?? 'Type not set' }}</p>
@@ -178,11 +177,7 @@
                 <article data-volunteer-card data-volunteer-id="{{ $volunteer->id }}" data-member="{{ $row['member'] }}" data-search="{{ $row['searchText'] }}"
                          class="flex h-full min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <div class="flex h-11 shrink-0 items-center gap-3">
-                        @if($volunteer->profile_photo_path)
-                            <img src="{{ asset('storage/'.$volunteer->profile_photo_path) }}" alt="{{ $volunteer->name }}" class="h-11 w-11 shrink-0 rounded-full object-cover">
-                        @else
-                            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-jci-blue text-xs font-black text-white">{{ $row['initials'] }}</span>
-                        @endif
+                        <x-ui.avatar :user="$volunteer" size="lg" class="bg-jci-blue text-white" />
                         <div class="min-w-0">
                             <h5 class="truncate font-bold text-slate-900 dark:text-white">{{ $volunteer->name }}</h5>
                             <div class="mt-0.5">

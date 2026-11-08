@@ -29,7 +29,15 @@
 @endphp
 
 @if($src)
-    <img {{ $attributes->merge(['class' => "{$box} shrink-0 rounded-full object-cover", 'src' => $src, 'alt' => $displayName]) }}>
+    <img
+        {{ $attributes->merge(['class' => "{$box} shrink-0 rounded-full object-cover", 'src' => $src, 'alt' => $displayName]) }}
+        onerror="this.hidden = true; this.nextElementSibling.hidden = false;"
+    >
+    <span
+        hidden
+        {{ $attributes->merge(['class' => "{$box} inline-flex shrink-0 items-center justify-center rounded-full bg-slate-100 font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"]) }}
+        title="{{ $displayName }}"
+    >{{ $initials }}</span>
 @else
     <span {{ $attributes->merge(['class' => "{$box} inline-flex shrink-0 items-center justify-center rounded-full bg-slate-100 font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300"]) }} title="{{ $displayName }}">{{ $initials }}</span>
 @endif
