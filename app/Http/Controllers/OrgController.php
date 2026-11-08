@@ -2699,7 +2699,6 @@ class OrgController extends Controller
 
         return $format === 'pdf' ? ReportFiles::pdf($report) : ReportFiles::excel($report);
     }
-}
 
     public function auditLogs(Request $request)
     {
