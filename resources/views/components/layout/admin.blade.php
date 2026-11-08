@@ -48,10 +48,21 @@
                        class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all {{ $activeTab === 'volunteers' ? 'text-white bg-jci-blue shadow-md shadow-sky-500/25' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800' }}">
                         <i class="fa-solid fa-user-group text-sm w-4"></i> Volunteers
                         @php
-                            $volunteerTotal = \App\Models\User::where('role', 'volunteer')->count();
+                            $approvedMemberCount = \Illuminate\Support\Facades\DB::table('organization_applications')
+                                ->join('users as volunteers', 'volunteers.id', '=', 'organization_applications.user_id')
+                                ->join('users as organizations', 'organizations.id', '=', 'organization_applications.organization_id')
+                                ->where('organization_applications.status', 'approved')
+                                ->where('volunteers.role', 'volunteer')
+                                ->where('volunteers.status', 'approved')
+                                ->whereNull('volunteers.deleted_at')
+                                ->where('organizations.role', 'organization')
+                                ->where('organizations.status', 'approved')
+                                ->whereNull('organizations.deleted_at')
+                                ->distinct()
+                                ->count('organization_applications.user_id');
                         @endphp
-                        @if ($volunteerTotal > 0)
-                            <span class="ml-auto {{ $activeTab === 'volunteers' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $volunteerTotal }}</span>
+                        @if ($approvedMemberCount > 0)
+                            <span class="ml-auto {{ $activeTab === 'volunteers' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300' }} text-[10px] px-2 py-0.5 rounded-full font-black">{{ $approvedMemberCount }}</span>
                         @endif
                     </a>
 

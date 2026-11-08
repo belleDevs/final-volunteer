@@ -129,6 +129,10 @@ class RoleDashboardsAndExportsTest extends TestCase
             '/<p class="mt-5 text-3xl font-black text-slate-900 tracking-tight">1<\/p>\s*<p class="mt-1 text-sm text-slate-400 font-medium">Organization-Approved Volunteers<\/p>/',
             $dashboard->getContent()
         );
+        $this->assertMatchesRegularExpression(
+            '/<a href="[^"]*tab=volunteers"[^>]*>.*?<span[^>]*>1<\/span>/s',
+            $dashboard->getContent()
+        );
     }
 
     public function test_all_roles_can_download_pdf_and_excel_reports_and_scoped_audit_exports(): void
