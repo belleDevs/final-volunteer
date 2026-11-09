@@ -23,6 +23,7 @@ use App\Support\VolunteerAssistant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
@@ -834,6 +835,17 @@ class VolunteerController extends Controller
         if ($request->hasFile('completion_proof')) {
             $proofPath = $request->file('completion_proof')
                 ->store('task-proofs/' . Auth::id(), 'public');
+
+            if ($proofPath === false) {
+                Log::error('Task completion evidence could not be stored.', [
+                    'assignment_id' => $assignment->id,
+                    'volunteer_id' => Auth::id(),
+                ]);
+
+                return redirect()->route('volunteer.dashboard', ['section' => 'tasks'])
+                    ->withInput()
+                    ->with('error', 'We could not save your evidence file. Please try again.');
+            }
         }
 
         $previousStatus = $assignment->status;

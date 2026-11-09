@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->foreignId('event_id')->constrained('events')->onDelete('cascade');
             $table->foreignId('task_id')->nullable()->constrained('tasks')->onDelete('cascade');
-            $table->enum('status', ['pending', 'approved', 'rejected', 'cancelled', 'completed'])->default('pending');
+            $table->enum('status', ['pending', 'approved', 'rejected', 'cancelled', 'completed', 'submitted'])->default('pending');
             $table->decimal('hours_logged', 5, 2)->default(0.00);
             $table->text('feedback')->nullable();
             $table->timestamps();

@@ -125,8 +125,10 @@ class VolunteerHubTest extends TestCase
             'status' => 'pending', // NOT approved
         ]);
 
-        $response = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id));
-        $response->assertRedirect(route('volunteer.dashboard'));
+        $response = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id), [
+            'completion_note' => 'The task has not been approved.',
+        ]);
+        $response->assertRedirect(route('volunteer.dashboard', ['section' => 'tasks']));
         $response->assertSessionHas('error', 'You cannot complete a duty that has not been approved.');
 
         $this->assertEquals('pending', $assignment->fresh()->status);
@@ -134,9 +136,9 @@ class VolunteerHubTest extends TestCase
     }
 
     /**
-     * Test that a volunteer cannot complete an already completed assignment (no duplicate certificates).
+     * Test that a volunteer cannot resubmit an assignment while it awaits review.
      */
-    public function test_volunteer_cannot_duplicate_task_completion(): void
+    public function test_volunteer_cannot_resubmit_task_while_it_is_waiting_for_review(): void
     {
         $volunteer = User::factory()->create([
             'role' => 'volunteer',
@@ -171,20 +173,19 @@ class VolunteerHubTest extends TestCase
             'status' => 'approved',
         ]);
 
-        // Complete the first time (should succeed)
-        $response1 = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id));
-        $response1->assertRedirect(route('volunteer.dashboard'));
+        $submission = ['completion_note' => 'Completed the assigned work.'];
+        $response1 = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id), $submission);
+        $response1->assertRedirect(route('volunteer.dashboard', ['section' => 'tasks']));
         $response1->assertSessionHas('success');
-        
-        $this->assertEquals('completed', $assignment->fresh()->status);
-        $this->assertEquals(1, Certificate::count());
 
-        // Attempt to complete the second time (should fail/redirect with error)
-        $response2 = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id));
-        $response2->assertRedirect(route('volunteer.dashboard'));
-        $response2->assertSessionHas('error', 'This duty has already been completed.');
+        $this->assertEquals('submitted', $assignment->fresh()->status);
+        $this->assertEquals(0, Certificate::count());
 
-        $this->assertEquals(1, Certificate::count()); // Still 1 certificate, not 2
+        $response2 = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id), $submission);
+        $response2->assertRedirect(route('volunteer.dashboard', ['section' => 'tasks']));
+        $response2->assertSessionHas('error', 'This duty is already submitted and waiting for organization review.');
+
+        $this->assertEquals(0, Certificate::count());
     }
 
     /**
@@ -220,9 +221,9 @@ class VolunteerHubTest extends TestCase
     }
 
     /**
-     * Test notification is created when a task is completed.
+     * Test notification is created when a volunteer submits task evidence.
      */
-    public function test_notification_is_created_on_task_completion(): void
+    public function test_organization_is_notified_when_volunteer_submits_task_evidence(): void
     {
         $volunteer = User::factory()->create([
             'role' => 'volunteer',
@@ -257,11 +258,13 @@ class VolunteerHubTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $response = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id));
-        $response->assertRedirect(route('volunteer.dashboard'));
+        $response = $this->actingAs($volunteer)->post(route('volunteer.tasks.complete', $assignment->id), [
+            'completion_note' => 'Completed the assigned work.',
+        ]);
+        $response->assertRedirect(route('volunteer.dashboard', ['section' => 'tasks']));
 
         $this->assertEquals(1, \Illuminate\Support\Facades\DB::table('notifications')
-            ->where('notifiable_id', $volunteer->id)
+            ->where('notifiable_id', $org->id)
             ->count());
     }
 
