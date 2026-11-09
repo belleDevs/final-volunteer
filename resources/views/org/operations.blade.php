@@ -427,9 +427,9 @@
                                     </p>
                                 </div>
                                 @if($review->completion_proof_path)
-                                    <a href="{{ route('org.assignments.proof', $review->id) }}"
+                                    <a href="{{ route('org.assignments.proof', $review->id) }}" target="_blank" rel="noopener noreferrer"
                                        class="text-jci-blue hover:underline text-[10px] font-black flex items-center gap-1">
-                                        <i class="fa-solid fa-paperclip"></i> Download Proof
+                                        <i class="fa-solid fa-paperclip"></i> View evidence
                                     </a>
                                 @endif
                             </div>
@@ -579,7 +579,7 @@
                             <div>
                                 <h4 class="text-xs font-black text-slate-800">Volunteer Email Outreach</h4>
                                 <p class="text-[10px] text-slate-500 leading-relaxed">
-                                    Sends a real email through Gmail SMTP and a portal notification to matching approved volunteers.
+                                    Sends a real email through VolunteerHub's Gmail API and a portal notification to matching approved volunteers.
                                 </p>
                             </div>
                         </div>

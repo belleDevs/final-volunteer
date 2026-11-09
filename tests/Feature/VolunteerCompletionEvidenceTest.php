@@ -64,5 +64,11 @@ class VolunteerCompletionEvidenceTest extends TestCase
         $this->assertSame('Collected litter around the park.', $assignment->completion_note);
         $this->assertNotNull($assignment->completion_proof_path);
         Storage::disk('public')->assertExists($assignment->completion_proof_path);
+
+        $evidenceResponse = $this->actingAs($organization)
+            ->get(route('org.assignments.proof', $assignment));
+
+        $evidenceResponse->assertOk();
+        $this->assertStringStartsWith('inline;', $evidenceResponse->headers->get('Content-Disposition'));
     }
 }

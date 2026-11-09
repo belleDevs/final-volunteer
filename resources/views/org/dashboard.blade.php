@@ -1315,7 +1315,7 @@
                                     <p class="mt-0.5 text-xs text-slate-400">{{ $review->event->title ?? 'Event' }}@if($review->submitted_at) · {{ \App\Support\ScheduleClock::stamp($review->submitted_at) }}@endif</p>
                                 </div>
                                 @if($review->completion_proof_path)
-                                    <a href="{{ route('org.assignments.proof', $review->id) }}" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:text-slate-200">
+                                    <a href="{{ route('org.assignments.proof', $review->id) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-jci-blue hover:text-jci-blue dark:border-slate-700 dark:text-slate-200">
                                         <i class="fa-solid fa-paperclip"></i> View evidence
                                     </a>
                                 @endif

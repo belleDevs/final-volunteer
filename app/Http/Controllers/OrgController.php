@@ -2302,16 +2302,18 @@ class OrgController extends Controller
     }
 
     /**
-     * Download submitted completion proof for assignments owned by the organization.
+     * View submitted completion proof for assignments owned by the organization.
      */
-    public function downloadCompletionProof(Assignment $assignment)
+    public function viewCompletionProof(Assignment $assignment)
     {
         abort_unless($assignment->event && (int) $assignment->event->organization_id === Auth::id(), 403);
 
         $path = $assignment->completion_proof_path;
         abort_unless($path && Storage::disk('public')->exists($path), 404);
 
-        return Storage::disk('public')->download($path);
+        return Storage::disk('public')->response($path, basename($path), [
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'inline');
     }
 
     /**

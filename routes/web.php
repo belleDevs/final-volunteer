@@ -8,6 +8,8 @@ use App\Http\Controllers\VolunteerController;
 
 // Authentication
 Route::get('/', [AuthController::class, 'index'])->name('home');
+Route::view('/about', 'public.home')->name('public.home');
+Route::view('/privacy', 'public.privacy')->name('public.privacy');
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
@@ -119,7 +121,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/documents', [OrgController::class, 'uploadDocument'])->name('org.documents.store');
         Route::get('/documents/{document}/download', [OrgController::class, 'downloadDocument'])->name('org.documents.download');
         Route::delete('/documents/{document}', [OrgController::class, 'destroyDocument'])->name('org.documents.destroy');
-        Route::get('/assignments/{assignment}/proof', [OrgController::class, 'downloadCompletionProof'])->name('org.assignments.proof');
+        Route::get('/assignments/{assignment}/proof', [OrgController::class, 'viewCompletionProof'])->name('org.assignments.proof');
         Route::post('/assignments/{assignment}/approve', [OrgController::class, 'approveCompletion'])->name('org.assignments.approve');
         Route::post('/assignments/{assignment}/reject', [OrgController::class, 'rejectCompletion'])->name('org.assignments.reject');
         Route::post('/certificates', [OrgController::class, 'issueCertificate'])->name('org.certificates.store');
